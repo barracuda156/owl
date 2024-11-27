@@ -203,8 +203,7 @@ else
             platform_dir="/MacOS"
             ;;
         *)
-            echo "Don't know where to put the executable on this platform" >&2
-            exit 1
+            platform_dir="/MacOS"
             ;;
     esac
 fi
