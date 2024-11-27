@@ -172,7 +172,8 @@ static void dataReleaseCallback(void *info, const void *data, size_t size) {
 #ifdef OWL_PLATFORM_APPLE
     CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
     CGContextSetBlendMode(context, kCGBlendModeCopy);
-    CGContextDrawImage(context, rect, _image);
+    CGRect cgRect = CGRectMake(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
+    CGContextDrawImage(context, cgRect, _image);
 #else
     [_rep drawInRect: rect
             fromRect: rect
