@@ -29,11 +29,14 @@
     OwlXdgSurface *_xdgSurface;
     BOOL _configured;
     BOOL _activated, _fullscreen, _resizing, _maximized;
+    BOOL _destroying;
     OwlWindowWrapper *_window;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource
                 surface: (OwlSurface *) surface
              xdgSurface: (OwlXdgSurface *) xdgSurface;
+
+- (void) sendConfigureWithSize: (NSSize) size;
 
 @end

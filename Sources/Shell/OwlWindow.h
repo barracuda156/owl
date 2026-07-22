@@ -31,5 +31,6 @@
 - (IBAction) toggleDisplaySSD: (NSMenuItem *) sender;
 
 - (void) runInteractiveMove;
+- (void) runInteractiveResizeWithEdges: (uint32_t) edges;
 
 @end

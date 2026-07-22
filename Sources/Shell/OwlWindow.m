@@ -113,4 +113,87 @@
     }
 }
 
+/*
+ * Resize edge values from xdg-shell protocol:
+ * NONE = 0, TOP = 1, BOTTOM = 2, LEFT = 4, RIGHT = 8
+ * TOP_LEFT = 5, BOTTOM_LEFT = 6, TOP_RIGHT = 9, BOTTOM_RIGHT = 10
+ */
+#define RESIZE_EDGE_TOP    1
+#define RESIZE_EDGE_BOTTOM 2
+#define RESIZE_EDGE_LEFT   4
+#define RESIZE_EDGE_RIGHT  8
+
+- (void) runInteractiveResizeWithEdges: (uint32_t) edges {
+    NSPoint originalMouseLocation = [NSEvent mouseLocation];
+    NSRect originalFrame = [self frame];
+    NSEventMask mask = NSLeftMouseUpMask | NSMouseMovedMask | NSLeftMouseDraggedMask;
+
+    BOOL resizeTop = (edges & RESIZE_EDGE_TOP) != 0;
+    BOOL resizeBottom = (edges & RESIZE_EDGE_BOTTOM) != 0;
+    BOOL resizeLeft = (edges & RESIZE_EDGE_LEFT) != 0;
+    BOOL resizeRight = (edges & RESIZE_EDGE_RIGHT) != 0;
+
+    /* Minimum window size */
+    CGFloat minWidth = 100.0;
+    CGFloat minHeight = 100.0;
+
+    while (YES) {
+        NSEvent *event = [NSApp nextEventMatchingMask: mask
+                                            untilDate: [NSDate distantFuture]
+                                               inMode: NSEventTrackingRunLoopMode
+                                              dequeue: YES];
+
+        if ([event type] == NSLeftMouseUp) {
+            break;
+        }
+
+        NSPoint mouseLocation = [NSEvent mouseLocation];
+        CGFloat deltaX = mouseLocation.x - originalMouseLocation.x;
+        CGFloat deltaY = mouseLocation.y - originalMouseLocation.y;
+
+        NSRect newFrame = originalFrame;
+
+        if (resizeRight) {
+            newFrame.size.width = originalFrame.size.width + deltaX;
+            if (newFrame.size.width < minWidth) {
+                newFrame.size.width = minWidth;
+            }
+        }
+
+        if (resizeLeft) {
+            CGFloat newWidth = originalFrame.size.width - deltaX;
+            if (newWidth < minWidth) {
+                newWidth = minWidth;
+                deltaX = originalFrame.size.width - minWidth;
+            }
+            newFrame.size.width = newWidth;
+            newFrame.origin.x = originalFrame.origin.x + deltaX;
+        }
+
+        /*
+         * Note: In Cocoa, Y increases upward, and frame origin is bottom-left.
+         * "Top" in Wayland (screen coordinates) = larger Y in Cocoa.
+         * "Bottom" in Wayland = smaller Y in Cocoa.
+         */
+        if (resizeTop) {
+            newFrame.size.height = originalFrame.size.height + deltaY;
+            if (newFrame.size.height < minHeight) {
+                newFrame.size.height = minHeight;
+            }
+        }
+
+        if (resizeBottom) {
+            CGFloat newHeight = originalFrame.size.height - deltaY;
+            if (newHeight < minHeight) {
+                newHeight = minHeight;
+                deltaY = originalFrame.size.height - minHeight;
+            }
+            newFrame.size.height = newHeight;
+            newFrame.origin.y = originalFrame.origin.y + deltaY;
+        }
+
+        [self setFrame: newFrame display: YES];
+    }
+}
+
 @end

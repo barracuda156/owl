@@ -30,6 +30,7 @@
 
 static void xdg_toplevel_v6_destroy(struct wl_resource *resource) {
     OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
+    self->_destroying = YES;
     [self->_window close];
     [self release];
 }
@@ -74,6 +75,52 @@ static void xdg_toplevel_v6_move_handler(
 ) {
     OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
     [[self->_window window] runInteractiveMove];
+}
+
+static void xdg_toplevel_v6_resize_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *seat_resource,
+    uint32_t serial,
+    uint32_t edges
+) {
+    OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
+    self->_resizing = YES;
+    [self sendConfigureWithSize: NSZeroSize];
+    [[self->_window window] runInteractiveResizeWithEdges: edges];
+    self->_resizing = NO;
+    [self sendConfigureWithSize: NSZeroSize];
+}
+
+static void xdg_toplevel_v6_show_window_menu_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *seat_resource,
+    uint32_t serial,
+    int32_t x,
+    int32_t y
+) {
+    // We don't have a window menu to show.
+}
+
+static void xdg_toplevel_v6_set_fullscreen_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *output_resource
+) {
+    // We don't support fullscreen; re-send a configure without
+    // the fullscreen state so the client knows it stayed
+    // windowed.
+    OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
+    [self sendConfigureWithSize: NSZeroSize];
+}
+
+static void xdg_toplevel_v6_unset_fullscreen_handler(
+    struct wl_client *client,
+    struct wl_resource *resource
+) {
+    OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
+    [self sendConfigureWithSize: NSZeroSize];
 }
 
 static void xdg_toplevel_v6_set_max_size_handler(
@@ -123,13 +170,16 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
     .set_parent = xdg_toplevel_v6_set_parent_handler,
     .set_title = xdg_toplevel_v6_set_title_handler,
     .set_app_id = xdg_toplevel_v6_set_app_id_handler,
+    .show_window_menu = xdg_toplevel_v6_show_window_menu_handler,
     .move = xdg_toplevel_v6_move_handler,
+    .resize = xdg_toplevel_v6_resize_handler,
     .set_max_size = xdg_toplevel_v6_set_max_size_handler,
     .set_min_size = xdg_toplevel_v6_set_min_size_handler,
     .set_minimized = xdg_toplevel_v6_set_minimized_handler,
     .set_maximized = xdg_toplevel_v6_set_maximized_handler,
-    .unset_maximized = xdg_toplevel_v6_unset_maximized_handler
-    // TODO
+    .unset_maximized = xdg_toplevel_v6_unset_maximized_handler,
+    .set_fullscreen = xdg_toplevel_v6_set_fullscreen_handler,
+    .unset_fullscreen = xdg_toplevel_v6_unset_fullscreen_handler
 };
 
 - (id) initWithResource: (struct wl_resource *) resource
@@ -232,6 +282,7 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
 }
 
 - (void) windowDidResize: (NSNotification *) notification {
+    if (_destroying) return;
     NSWindow *w = [notification object];
     _maximized = NO; // [w isZoomed];
     NSRect frame = [w frame];
@@ -241,6 +292,7 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
 }
 
 - (BOOL) windowShouldClose: (NSWindow *) w {
+    if (_destroying) return YES;
     zxdg_toplevel_v6_send_close(_resource);
     [[OwlServer sharedServer] flushClientsLater];
     return NO;
@@ -252,22 +304,26 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
 }
 
 - (void) windowDidBecomeMain: (NSNotification *) notification {
+    if (_destroying) return;
     _activated = YES;
     [self sendConfigureWithSize: NSZeroSize];
 }
 
 - (void) windowDidResignMain: (NSNotification *) notification {
+    if (_destroying) return;
     _activated = NO;
     [self sendConfigureWithSize: NSZeroSize];
 }
 
 - (void) windowDidBecomeKey: (NSNotification *) notification {
+    if (_destroying) return;
     [[self keyboard] sendEnterSurface: _surface];
     [[self dataDevice] focused];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
 - (void) windowDidResignKey: (NSNotification *) notification {
+    if (_destroying) return;
     [[self keyboard] sendLeaveSurface: _surface];
     [[self dataDevice] unfocused];
     [[OwlServer sharedServer] flushClientsLater];

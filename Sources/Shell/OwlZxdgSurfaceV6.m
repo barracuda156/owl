@@ -62,6 +62,43 @@ static void xdg_surface_v6_ack_configure_handler(
     // TODO
 }
 
+/* Stub handlers for zxdg_popup_v6 */
+static void xdg_popup_v6_destroy(struct wl_client *client, struct wl_resource *resource) {
+    wl_resource_destroy(resource);
+}
+static void xdg_popup_v6_grab(struct wl_client *client, struct wl_resource *resource,
+    struct wl_resource *seat, uint32_t serial) { /* stub */ }
+
+static const struct zxdg_popup_v6_interface xdg_popup_v6_impl = {
+    .destroy = xdg_popup_v6_destroy,
+    .grab = xdg_popup_v6_grab
+};
+
+static void xdg_popup_v6_resource_destroy(struct wl_resource *resource) {
+    /* Nothing to clean up for stub */
+}
+
+static void xdg_surface_v6_get_popup_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t id,
+    struct wl_resource *parent_resource,
+    struct wl_resource *positioner_resource
+) {
+    /* TODO: Implement popup windows properly */
+    /* For now, create a stub popup that does nothing */
+    struct wl_resource *popup_resource = wl_resource_create(
+        client,
+        &zxdg_popup_v6_interface,
+        1,
+        id
+    );
+    wl_resource_set_implementation(popup_resource, &xdg_popup_v6_impl, NULL, xdg_popup_v6_resource_destroy);
+
+    /* Send popup_done immediately to tell client popup was dismissed */
+    zxdg_popup_v6_send_popup_done(popup_resource);
+}
+
 static void xdg_surface_v6_set_window_geometry_handler(
     struct wl_client *client,
     struct wl_resource *resource,
@@ -78,9 +115,9 @@ static void xdg_surface_v6_set_window_geometry_handler(
 static const struct zxdg_surface_v6_interface xdg_surface_v6_impl = {
     .destroy = xdg_surface_v6_destroy_handler,
     .get_toplevel = xdg_surface_v6_get_xdg_toplevel_handler,
-    .ack_configure = xdg_surface_v6_ack_configure_handler,
-    .set_window_geometry = xdg_surface_v6_set_window_geometry_handler
-    // TODO
+    .get_popup = xdg_surface_v6_get_popup_handler,
+    .set_window_geometry = xdg_surface_v6_set_window_geometry_handler,
+    .ack_configure = xdg_surface_v6_ack_configure_handler
 };
 
 - (id) initWithResource: (struct wl_resource *) resource

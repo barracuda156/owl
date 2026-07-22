@@ -29,6 +29,14 @@ static void shell_surface_destroy(struct wl_resource *resource) {
     [self release];
 }
 
+static void shell_surface_pong_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t serial
+) {
+    /* Client responded to ping - nothing to do */
+}
+
 static void shell_surface_move_handler(
     struct wl_client *client,
     struct wl_resource *resource,
@@ -39,12 +47,72 @@ static void shell_surface_move_handler(
     [[self->_window window] runInteractiveMove];
 }
 
+static void shell_surface_resize_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *seat_resource,
+    uint32_t serial,
+    uint32_t edges
+) {
+    OwlWlShellSurface *self = wl_resource_get_user_data(resource);
+    [[self->_window window] runInteractiveResizeWithEdges: edges];
+}
+
 static void shell_surface_set_toplevel_handler(
     struct wl_client *client,
     struct wl_resource *resource
 ) {
     OwlWlShellSurface *self = wl_resource_get_user_data(resource);
     self->_mode = OWL_WL_SHELL_SURFACE_MODE_TOPLEVEL;
+}
+
+static void shell_surface_set_transient_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *parent_resource,
+    int32_t x,
+    int32_t y,
+    uint32_t flags
+) {
+    // We don't support positioning transient surfaces relative to
+    // their parent; treat it like a regular toplevel.
+    OwlWlShellSurface *self = wl_resource_get_user_data(resource);
+    self->_mode = OWL_WL_SHELL_SURFACE_MODE_TOPLEVEL;
+}
+
+static void shell_surface_set_fullscreen_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t method,
+    uint32_t framerate,
+    struct wl_resource *output_resource
+) {
+    // We don't support fullscreen.
+}
+
+static void shell_surface_set_popup_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *seat_resource,
+    uint32_t serial,
+    struct wl_resource *parent_resource,
+    int32_t x,
+    int32_t y,
+    uint32_t flags
+) {
+    // We don't support popups on wl_shell; treat it like a regular
+    // toplevel.
+    OwlWlShellSurface *self = wl_resource_get_user_data(resource);
+    self->_mode = OWL_WL_SHELL_SURFACE_MODE_TOPLEVEL;
+}
+
+static void shell_surface_set_maximized_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *output_resource
+) {
+    OwlWlShellSurface *self = wl_resource_get_user_data(resource);
+    [self->_window maximize];
 }
 
 static void shell_surface_set_title_handler(
@@ -56,10 +124,25 @@ static void shell_surface_set_title_handler(
     [self->_window setTitle: [NSString stringWithUTF8String: raw_title]];
 }
 
+static void shell_surface_set_class_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    const char *class_
+) {
+    // Do nothing.
+}
+
 static const struct wl_shell_surface_interface shell_surface_interface = {
+    .pong = shell_surface_pong_handler,
+    .move = shell_surface_move_handler,
+    .resize = shell_surface_resize_handler,
     .set_toplevel = shell_surface_set_toplevel_handler,
-    .set_title = shell_surface_set_title_handler
-    // TODO
+    .set_transient = shell_surface_set_transient_handler,
+    .set_fullscreen = shell_surface_set_fullscreen_handler,
+    .set_popup = shell_surface_set_popup_handler,
+    .set_maximized = shell_surface_set_maximized_handler,
+    .set_title = shell_surface_set_title_handler,
+    .set_class = shell_surface_set_class_handler
 };
 
 - (id) initWithResource: (struct wl_resource *) resource

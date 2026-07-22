@@ -56,10 +56,60 @@ static void xdg_shell_v6_get_xdg_surface(
                                         surface: surface] release];
 }
 
+/* Stub handlers for zxdg_positioner_v6 - stores positioning hints for popups */
+static void xdg_positioner_v6_destroy(struct wl_client *client, struct wl_resource *resource) {
+    wl_resource_destroy(resource);
+}
+static void xdg_positioner_v6_set_size(struct wl_client *client, struct wl_resource *resource,
+    int32_t width, int32_t height) { /* stub */ }
+static void xdg_positioner_v6_set_anchor_rect(struct wl_client *client, struct wl_resource *resource,
+    int32_t x, int32_t y, int32_t width, int32_t height) { /* stub */ }
+static void xdg_positioner_v6_set_anchor(struct wl_client *client, struct wl_resource *resource,
+    uint32_t anchor) { /* stub */ }
+static void xdg_positioner_v6_set_gravity(struct wl_client *client, struct wl_resource *resource,
+    uint32_t gravity) { /* stub */ }
+static void xdg_positioner_v6_set_constraint_adjustment(struct wl_client *client, struct wl_resource *resource,
+    uint32_t constraint_adjustment) { /* stub */ }
+static void xdg_positioner_v6_set_offset(struct wl_client *client, struct wl_resource *resource,
+    int32_t x, int32_t y) { /* stub */ }
+
+static const struct zxdg_positioner_v6_interface xdg_positioner_v6_impl = {
+    .destroy = xdg_positioner_v6_destroy,
+    .set_size = xdg_positioner_v6_set_size,
+    .set_anchor_rect = xdg_positioner_v6_set_anchor_rect,
+    .set_anchor = xdg_positioner_v6_set_anchor,
+    .set_gravity = xdg_positioner_v6_set_gravity,
+    .set_constraint_adjustment = xdg_positioner_v6_set_constraint_adjustment,
+    .set_offset = xdg_positioner_v6_set_offset
+};
+
+static void xdg_shell_v6_create_positioner(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t id
+) {
+    struct wl_resource *positioner_resource = wl_resource_create(
+        client,
+        &zxdg_positioner_v6_interface,
+        1,
+        id
+    );
+    wl_resource_set_implementation(positioner_resource, &xdg_positioner_v6_impl, NULL, NULL);
+}
+
+static void xdg_shell_v6_pong(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t serial
+) {
+    /* Client responded to ping - nothing to do */
+}
+
 static const struct zxdg_shell_v6_interface xdg_shell_v6_impl = {
     .destroy = xdg_shell_v6_destroy_handler,
-    .get_xdg_surface = xdg_shell_v6_get_xdg_surface
-    // TODO
+    .create_positioner = xdg_shell_v6_create_positioner,
+    .get_xdg_surface = xdg_shell_v6_get_xdg_surface,
+    .pong = xdg_shell_v6_pong
 };
 
 
