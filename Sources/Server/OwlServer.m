@@ -24,6 +24,7 @@
 #import "OwlWlShell.h"
 #import "OwlZxdgShellV6.h"
 #import "OwlXdgWmBase.h"
+#import "OwlZxdgDecorationManagerV1.h"
 #import "OwlSeat.h"
 #import "OwlOutput.h"
 #import "OwlWlDataDeviceManager.h"
@@ -125,6 +126,7 @@
     [OwlWlShell addGlobalToDisplay: _display];
     [OwlZxdgShellV6 addGlobalToDisplay: _display];
     [OwlXdgWmBase addGlobalToDisplay: _display];
+    [OwlZxdgDecorationManagerV1 addGlobalToDisplay: _display];
     [OwlWlDataDeviceManager addGlobalToDisplay: _display];
     [OwlSeat addGlobalToDisplay: _display];
     [OwlOutput addGlobalToDisplay: _display];

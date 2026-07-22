@@ -31,7 +31,12 @@
 }
 
 - (void) createWindow {
-    _window = [[OwlWindow alloc] initWithSize: _size displaySSD: NO];
+    // Display native decorations (title bar, close button, resize
+    // handles) by default. We advertise zxdg_decoration_manager_v1
+    // and always answer "server side", so well-behaved clients
+    // won't draw their own decorations. For clients that draw
+    // them anyway, the SSD can be toggled off from the menu.
+    _window = [[OwlWindow alloc] initWithSize: _size displaySSD: YES];
 
     if (_title != nil) {
         [_window setTitle: _title];
