@@ -36,4 +36,8 @@
 - (void) sendKey: (unsigned short) keyCode isPressed: (BOOL) isPressed;
 - (void) sendModifiers: (uint32_t) modifiers;
 
+/* Translate an NSFlagsChanged event into modifier key events
+ * plus a wl_keyboard.modifiers event. */
+- (void) handleFlagsChanged: (NSEvent *) event;
+
 @end

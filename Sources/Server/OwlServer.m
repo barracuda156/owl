@@ -203,7 +203,10 @@
 // Cocoa run loop. See the comment on -flushClients for why you would
 // want to use this method instead of that one.
 - (void) flushClientsLater {
-    NSArray *modes = [NSArray arrayWithObject: NSDefaultRunLoopMode];
+    // Flush in the common modes so that events sent during
+    // nested tracking loops (interactive move/resize) still
+    // reach the clients promptly.
+    NSArray *modes = [NSArray arrayWithObject: NSRunLoopCommonModes];
     NSRunLoop *loop = [NSRunLoop currentRunLoop];
     // The order argument below represents which order these delayed
     // selectors should be executed in; lower values go first. We do

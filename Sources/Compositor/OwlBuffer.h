@@ -38,6 +38,9 @@
 - (BOOL) needsGLForRendering;
 - (void) drawInRect: (NSRect) rect;
 
+/* Returns an NSImage for cursor creation (may return nil) */
+- (NSImage *) createNSImage;
+
 - (void) sendRelease;
 - (void) notifyDetached;
 

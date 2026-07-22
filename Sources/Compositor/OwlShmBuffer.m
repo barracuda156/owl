@@ -29,7 +29,8 @@
     case WL_SHM_FORMAT_XRGB8888:
         return kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little;
     case WL_SHM_FORMAT_ARGB8888:
-        return kCGImageAlphaFirst | kCGBitmapByteOrder32Little;
+        // Wayland ARGB buffers use premultiplied alpha.
+        return kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
     default:
         NSLog(@"Unknown shm format");
         return 0;
@@ -172,7 +173,7 @@ static void dataReleaseCallback(void *info, const void *data, size_t size) {
 #ifdef OWL_PLATFORM_APPLE
     CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
     CGContextSetBlendMode(context, kCGBlendModeCopy);
-    CGContextDrawImage(context, rect, _image);
+    CGContextDrawImage(context, NSRectToCGRect(rect), _image);
 #else
     [_rep drawInRect: rect
             fromRect: rect
@@ -181,6 +182,26 @@ static void dataReleaseCallback(void *info, const void *data, size_t size) {
       respectFlipped: NO
                hints: nil];
 #endif
+}
+
+- (NSImage *) createNSImage {
+    NSSize size = [self size];
+    NSImage *image = [[NSImage alloc] initWithSize: size];
+
+#ifdef OWL_PLATFORM_APPLE
+    if (_image != NULL) {
+        /* Create NSImage from CGImage */
+        NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithCGImage: _image];
+        [image addRepresentation: rep];
+        [rep release];
+    }
+#else
+    if (_rep != nil) {
+        [image addRepresentation: _rep];
+    }
+#endif
+
+    return image;
 }
 
 @end

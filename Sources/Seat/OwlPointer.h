@@ -30,6 +30,11 @@
 
 @interface OwlPointer : NSObject {
     struct wl_resource *_resource;
+    struct wl_resource *_cursorSurface;
+    struct wl_listener _cursorSurfaceDestroyListener;
+    int32_t _hotspotX;
+    int32_t _hotspotY;
+    NSCursor *_cursor;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource;
@@ -41,5 +46,10 @@
 - (void) sendLeaveSurface: (OwlSurface *) surface;
 - (void) sendScrollByX: (CGFloat) deltaX byY: (CGFloat) deltaY;
 - (void) sendButton: (uint32_t) button isPressed: (BOOL) isPressed;
+
+/* Cursor management */
+- (void) updateCursorFromSurface;
+- (void) applyCursor;
++ (void) notifyCursorSurfaceCommit: (struct wl_resource *) surfaceResource;
 
 @end

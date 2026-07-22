@@ -53,9 +53,47 @@ static void seat_get_keyboard(
     [[[OwlKeyboard alloc] initWithResource: keyboard_resource] release];
 }
 
+static void touch_release_handler(
+    struct wl_client *client,
+    struct wl_resource *resource
+) {
+    wl_resource_destroy(resource);
+}
+
+static const struct wl_touch_interface touch_impl = {
+    .release = touch_release_handler
+};
+
+static void seat_get_touch(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t id
+) {
+    // We never advertise the touch capability, so a well-behaved
+    // client will not request a touch object; still, don't crash
+    // if one does. Give it an inert wl_touch.
+    uint32_t version = wl_resource_get_version(resource);
+    struct wl_resource *touch_resource = wl_resource_create(
+        client,
+        &wl_touch_interface,
+        version,
+        id
+    );
+    wl_resource_set_implementation(touch_resource, &touch_impl, NULL, NULL);
+}
+
+static void seat_release_handler(
+    struct wl_client *client,
+    struct wl_resource *resource
+) {
+    wl_resource_destroy(resource);
+}
+
 static const struct wl_seat_interface seat_impl = {
     .get_pointer = seat_get_pointer,
-    .get_keyboard = seat_get_keyboard
+    .get_keyboard = seat_get_keyboard,
+    .get_touch = seat_get_touch,
+    .release = seat_release_handler
 };
 
 static void seat_destroy(struct wl_resource *resource) {
@@ -101,7 +139,10 @@ static void seat_bind(
 }
 
 + (void) addGlobalToDisplay: (struct wl_display *) display {
-    wl_global_create(display, &wl_seat_interface, 2, NULL, seat_bind);
+    // Version 5 is required by clients like foot; it obligates
+    // us to send wl_pointer.frame events and keyboard repeat
+    // information, which OwlPointer and OwlKeyboard handle.
+    wl_global_create(display, &wl_seat_interface, 5, NULL, seat_bind);
 }
 
 @end

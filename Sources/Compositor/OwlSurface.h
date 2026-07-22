@@ -72,4 +72,10 @@
 
 - (NSSize) geometrySizeAdjustements;
 
+/* Returns an NSImage of the current buffer content (for cursor use) */
+- (NSImage *) createCursorImage;
+
+/* Send out and clear any pending frame callbacks. */
+- (void) fireCallbacks;
+
 @end

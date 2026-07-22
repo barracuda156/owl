@@ -100,6 +100,12 @@ static const struct wl_buffer_interface buffer_impl = {
     // Do nothing, subclasses override this.
 }
 
+- (NSImage *) createNSImage {
+    // Default implementation returns nil.
+    // Subclasses (like OwlShmBuffer) override this.
+    return nil;
+}
+
 - (void) sendRelease {
     wl_buffer_send_release(_resource);
 }

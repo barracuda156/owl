@@ -32,4 +32,7 @@
 #endif
 }
 
+/* Returns an NSImage suitable for creating an NSCursor */
+- (NSImage *) createNSImage;
+
 @end

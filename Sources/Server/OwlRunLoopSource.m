@@ -86,7 +86,10 @@ static void socketCallback(
 
 - (void) addToRunLoop {
 #ifndef OWL_PLATFORM_GNUSTEP
-    CFRunLoopAddSource(CFRunLoopGetCurrent(), _source, kCFRunLoopDefaultMode);
+    // Use the common modes rather than just the default mode, so
+    // that we keep serving clients during nested event-tracking
+    // loops, such as native interactive window moves and resizes.
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), _source, kCFRunLoopCommonModes);
 #else
     int fd = wl_event_loop_get_fd(_event_loop);
 
@@ -99,7 +102,7 @@ static void socketCallback(
 
 - (void) removeFromRunLoop {
 #ifndef OWL_PLATFORM_GNUSTEP
-    CFRunLoopRemoveSource(CFRunLoopGetCurrent(), _source, kCFRunLoopDefaultMode);
+    CFRunLoopRemoveSource(CFRunLoopGetCurrent(), _source, kCFRunLoopCommonModes);
 #else
     int fd = wl_event_loop_get_fd(_event_loop);
 

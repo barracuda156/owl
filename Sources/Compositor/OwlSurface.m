@@ -76,6 +76,19 @@ static void surface_damage_handler(
     [self->_pendingState addDamage: rect];
 }
 
+static void surface_damage_buffer_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height
+) {
+    // We don't support buffer scales or transforms, so buffer
+    // coordinates are the same as surface coordinates.
+    surface_damage_handler(client, resource, x, y, width, height);
+}
+
 - (void) setPendingGeometry: (NSRect) geometry {
     [_pendingState setGeometry: geometry];
 }
@@ -162,17 +175,25 @@ static void surface_damage_handler(
 
     if (unmap) {
         [_role unmap];
-        // Nothing further to do, as we have no buffer.
+        // We have no buffer, so -drawRect: is not going to run;
+        // fire any pending frame callbacks so the client doesn't
+        // wait for them forever.
+        [self fireCallbacks];
         return;
     }
+
+    BOOL willRedraw = NO;
 
     if (!NSEqualSizes([self frame].size, [newBuffer size])) {
         [self setFrameSize: [newBuffer size]];
         [self updateTrackingRect];
+        [self setNeedsDisplay: YES];
+        willRedraw = YES;
     }
 
     if (map) {
         [_role map];
+        willRedraw = YES;
     } else {
         [_role update];
     }
@@ -180,13 +201,36 @@ static void surface_damage_handler(
     // Now, tell Cocoa to redraw this view.
     if (damageAll) {
         [self setNeedsDisplay: YES];
+        willRedraw = YES;
     } else {
         for (NSValue *value in [_currentState damage]) {
             NSRect rect = [value rectValue];
             rect.origin.y = [newBuffer size].height - rect.size.height - rect.origin.y;
             [self setNeedsDisplayInRect: rect];
+            willRedraw = YES;
         }
     }
+
+    // If the client requested frame callbacks but this commit
+    // won't cause a redraw (e.g. a commit with no damage), the
+    // callbacks would never fire from -drawRect:, deadlocking
+    // clients that wait for them before rendering. Fire them
+    // right away instead.
+    if (!willRedraw) {
+        [self fireCallbacks];
+    }
+}
+
+- (void) fireCallbacks {
+    if ([_callbacks count] == 0) {
+        return;
+    }
+    uint32_t timestamp = [OwlServer timestamp];
+    for (OwlCallback *callback in _callbacks) {
+        [callback sendDoneWithData: timestamp];
+    }
+    [_callbacks removeAllObjects];
+    [[OwlServer sharedServer] flushClientsLater];
 }
 
 static void surface_commit_handler(
@@ -195,6 +239,9 @@ static void surface_commit_handler(
 ) {
     OwlSurface *self = wl_resource_get_user_data(resource);
     [self commit];
+
+    /* Notify pointer in case this is a cursor surface */
+    [OwlPointer notifyCursorSurfaceCommit: resource];
 }
 
 - (void) drawRect: (NSRect) dirtyRect {
@@ -206,15 +253,9 @@ static void surface_commit_handler(
     [[_currentState buffer] drawInRect: [self bounds]];
 
     // We have painted; so send out all callbacks.
-    uint32_t timestamp = [OwlServer timestamp];
-    for (OwlCallback *callback in _callbacks) {
-        [callback sendDoneWithData: timestamp];
-    }
-    [_callbacks removeAllObjects];
+    [self fireCallbacks];
 
     [[self window] invalidateShadow];
-
-    [[OwlServer sharedServer] flushClientsLater];
 }
 
 static void surface_set_opaque_region_handler(
@@ -275,8 +316,8 @@ static const struct wl_surface_interface surface_interface = {
     .set_opaque_region = surface_set_opaque_region_handler,
     .set_input_region = surface_set_input_region_handler,
     .set_buffer_scale = surface_set_buffer_scale_handler,
-    .set_buffer_transform = surface_set_buffer_transform_handler
-    // TODO
+    .set_buffer_transform = surface_set_buffer_transform_handler,
+    .damage_buffer = surface_damage_buffer_handler
 };
 
 - (id) initWithResource: (struct wl_resource *) resource {
@@ -308,6 +349,14 @@ static const struct wl_surface_interface surface_interface = {
 
 - (void) setRole: (id<OwlSurfaceRole>) newRole {
     _role = newRole;
+}
+
+- (NSImage *) createCursorImage {
+    OwlBuffer *buffer = [_currentState buffer];
+    if (buffer == nil) {
+        return nil;
+    }
+    return [buffer createNSImage];
 }
 
 - (OwlPointer *) pointer {
@@ -415,7 +464,19 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) keyDown: (NSEvent *) event {
-    [[self keyboard] sendKey: [event keyCode] isPressed: YES];
+    OwlKeyboard *keyboard = [self keyboard];
+    if (keyboard == nil) {
+        return;
+    }
+    // Don't forward Cocoa's autorepeat to version 4+ keyboards:
+    // those clients repeat keys themselves based on the
+    // repeat_info event we send them. Older clients rely on
+    // the compositor repeating, so let repeats through.
+    if ([event isARepeat]
+        && wl_resource_get_version([keyboard resource]) >= 4) {
+        return;
+    }
+    [keyboard sendKey: [event keyCode] isPressed: YES];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
@@ -425,12 +486,7 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) flagsChanged: (NSEvent *) event {
-    NSUInteger flags = [event modifierFlags];
-    BOOL shift = (flags & NSShiftKeyMask) ? YES : NO;
-    BOOL ctrl = (flags & NSCommandKeyMask) ? YES : NO;
-    BOOL alt = (flags & NSAlternateKeyMask) ? YES : NO;
-    uint32_t mods = shift + ctrl * 4 + alt * 262152;
-    [[self keyboard] sendModifiers: mods];
+    [[self keyboard] handleFlagsChanged: event];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
