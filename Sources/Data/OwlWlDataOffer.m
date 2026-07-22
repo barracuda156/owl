@@ -52,9 +52,28 @@ static void data_offer_receive_handler(
     [self receiveContentOfMimeType: mime_type intoFileDescriptor: fd];
 }
 
+static void data_offer_finish_handler(
+    struct wl_client *client,
+    struct wl_resource *resource
+) {
+    // We don't support drag-and-drop yet; nothing to finish.
+}
+
+static void data_offer_set_actions_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t dnd_actions,
+    uint32_t preferred_action
+) {
+    // We don't support drag-and-drop yet; ignore the actions.
+}
+
 static const struct wl_data_offer_interface data_offer_impl = {
+    .accept = data_offer_accept,
     .destroy = data_offer_destroy_handler,
-    .receive = data_offer_receive_handler
+    .receive = data_offer_receive_handler,
+    .finish = data_offer_finish_handler,
+    .set_actions = data_offer_set_actions_handler
 };
 
 - (id) initWithResource: (struct wl_resource *) resource

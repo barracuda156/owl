@@ -89,10 +89,14 @@ static void data_device_manager_bind(
 }
 
 + (void) addGlobalToDisplay: (struct wl_display *) display {
+    // Version 3 is required by clients like foot. The version 3
+    // additions are all about drag-and-drop actions, which we
+    // don't support, but we do need to (harmlessly) accept the
+    // requests.
     wl_global_create(
         display,
         &wl_data_device_manager_interface,
-        2,
+        3,
         NULL,
         data_device_manager_bind
     );

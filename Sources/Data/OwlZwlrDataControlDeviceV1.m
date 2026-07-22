@@ -58,6 +58,18 @@ static void data_control_device_set_primary_selection_handler(
     }
     [[OwlSelection primary] setDataSource: dataSource];
 }
+#else
+/* Primary selection is not supported on this platform; the manager
+ * still advertises interface version 2, so this slot must not be
+ * NULL or a version-2 client calling set_primary_selection would
+ * crash the compositor. */
+static void data_control_device_set_primary_selection_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *source_resource
+) {
+    /* Not supported: ignore. */
+}
 #endif
 
 static void data_control_device_destroy_handler(
@@ -69,9 +81,7 @@ static void data_control_device_destroy_handler(
 
 static const struct zwlr_data_control_device_v1_interface data_control_device_impl = {
     .set_selection = data_control_device_set_selection_handler,
-#ifdef OWL_PLATFORM_GNUSTEP
     .set_primary_selection = data_control_device_set_primary_selection_handler,
-#endif
     .destroy = data_control_device_destroy_handler
 };
 

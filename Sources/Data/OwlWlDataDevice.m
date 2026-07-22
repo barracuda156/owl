@@ -72,7 +72,23 @@ static void data_device_release_handler(
     wl_resource_destroy(resource);
 }
 
+static void data_device_start_drag_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    struct wl_resource *source_resource,
+    struct wl_resource *origin_resource,
+    struct wl_resource *icon_resource,
+    uint32_t serial
+) {
+    // We don't support drag-and-drop yet. Tell the client the
+    // drag ended right away so it doesn't wait forever.
+    if (source_resource != NULL) {
+        wl_data_source_send_cancelled(source_resource);
+    }
+}
+
 static const struct wl_data_device_interface data_device_impl = {
+    .start_drag = data_device_start_drag_handler,
     .set_selection = data_device_set_selection_handler,
     .release = data_device_release_handler
 };

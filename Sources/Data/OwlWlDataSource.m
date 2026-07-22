@@ -43,9 +43,18 @@ static void data_source_offer_handler(
     [self->_mimeTypes addObject: [NSString stringWithUTF8String: mime_type]];
 }
 
+static void data_source_set_actions_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    uint32_t dnd_actions
+) {
+    // We don't support drag-and-drop yet; ignore the actions.
+}
+
 static const struct wl_data_source_interface data_source_impl = {
     .destroy = data_source_destroy_handler,
-    .offer = data_source_offer_handler
+    .offer = data_source_offer_handler,
+    .set_actions = data_source_set_actions_handler
 };
 
 - (id) initWithResource: (struct wl_resource *) resource {
