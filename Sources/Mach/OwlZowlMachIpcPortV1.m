@@ -16,6 +16,10 @@
  * along with Owl.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#import "OwlFeatures.h"
+
+#ifdef OWL_HAS_GCD
+
 #import "OwlZowlMachIpcPortV1.h"
 #import <Cocoa/Cocoa.h>
 #import <wayland-server.h>
@@ -92,3 +96,5 @@ kern_return_t owl_mach_ipc_v1_server_retrieve_port(
 }
 
 @end
+
+#endif /* OWL_HAS_GCD */

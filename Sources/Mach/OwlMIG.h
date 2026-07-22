@@ -16,6 +16,10 @@
  * along with Owl.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#import "OwlFeatures.h"
+
+#ifdef OWL_HAS_GCD
+
 #import <Cocoa/Cocoa.h>
 #import <mach/mach.h>
 #import <dispatch/dispatch.h>
@@ -43,3 +47,5 @@ extern mach_msg_return_t dispatch_mig_server(
              maxSize: (size_t) maxSize;
 
 @end
+
+#endif /* OWL_HAS_GCD */

@@ -17,7 +17,7 @@
  */
 
 #import "OwlFeatures.h"
-#ifdef OWL_PLATFORM_APPLE
+#if defined(OWL_HAS_IOSURFACE) && defined(OWL_HAS_GCD)
 
 #import <Cocoa/Cocoa.h>
 #import <wayland-server.h>
@@ -36,4 +36,4 @@
 
 @end
 
-#endif /* OWL_PLATFORM_APPLE */
+#endif /* OWL_HAS_IOSURFACE && OWL_HAS_GCD */

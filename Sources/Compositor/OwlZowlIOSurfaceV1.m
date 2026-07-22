@@ -17,7 +17,7 @@
  */
 
 #import "OwlFeatures.h"
-#ifdef OWL_PLATFORM_APPLE
+#if defined(OWL_HAS_IOSURFACE) && defined(OWL_HAS_GCD)
 
 #import "OwlZowlIOSurfaceV1.h"
 #import "owl-iosurface-unstable-v1.h"
@@ -128,4 +128,4 @@ kern_return_t owl_iosurface_v1_server_set_surface_port(
 
 @end
 
-#endif /* OWL_PLATFORM_APPLE */
+#endif /* OWL_HAS_IOSURFACE && OWL_HAS_GCD */

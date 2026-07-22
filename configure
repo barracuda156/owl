@@ -24,7 +24,10 @@ CC="${CC:-cc}"
 CFLAGS="${CFLAGS:-}"
 LDFLAGS="${LDFLAGS:-}"
 if [ "$(uname)" = Darwin ]; then
-    LIBS=${LIBS:-"-l wayland-server -framework Cocoa -framework OpenGL -framework IOSurface"}
+    # Use -weak_framework for IOSurface to support macOS 10.5 (Leopard)
+    # where IOSurface is not available. The code uses compile-time guards
+    # (OWL_HAS_IOSURFACE) to avoid calling IOSurface APIs on older systems.
+    LIBS=${LIBS:-"-l wayland-server -framework Cocoa -framework OpenGL -weak_framework IOSurface"}
 else
     LIBS=${LIBS:-"-l wayland-server -l gnustep-gui -l gnustep-base -l objc"}
 fi

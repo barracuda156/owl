@@ -18,8 +18,27 @@
 
 #ifdef __APPLE__
     #define OWL_PLATFORM_APPLE
+    #include <AvailabilityMacros.h>
+    /*
+     * Grand Central Dispatch (libdispatch) and IOSurface were introduced
+     * in Mac OS X 10.6 (Snow Leopard). On 10.5 (Leopard), we disable
+     * these features and fall back to SHM-only buffer support.
+     *
+     * Note: the GCD code must stick to the function-based libdispatch
+     * API (dispatch_source_set_event_handler_f() and friends), never
+     * the block-based one; FSF GCC does not support blocks.
+     */
+    #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+        #define OWL_HAS_GCD 1
+        #define OWL_HAS_IOSURFACE 1
+    #else
+        #undef OWL_HAS_GCD
+        #undef OWL_HAS_IOSURFACE
+    #endif
 #else
     #undef OWL_PLATFORM_APPLE
+    #undef OWL_HAS_GCD
+    #undef OWL_HAS_IOSURFACE
 #endif
 
 #ifdef GS_API_VERSION

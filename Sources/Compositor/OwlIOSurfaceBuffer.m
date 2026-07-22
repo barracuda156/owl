@@ -17,7 +17,7 @@
  */
 
 #import "OwlFeatures.h"
-#ifdef OWL_PLATFORM_APPLE
+#ifdef OWL_HAS_IOSURFACE
 
 #import "OwlIOSurfaceBuffer.h"
 #import <OpenGL/gl.h>
@@ -137,4 +137,4 @@
 
 @end
 
-#endif /* OWL_PLATFORM_APPLE */
+#endif /* OWL_HAS_IOSURFACE */

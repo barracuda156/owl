@@ -17,11 +17,12 @@
  */
 
 #import "OwlFeatures.h"
-#ifdef OWL_PLATFORM_APPLE
+#ifdef OWL_HAS_IOSURFACE
 
 #import "OwlBuffer.h"
 #import <Cocoa/Cocoa.h>
 #import <OpenGL/OpenGL.h>
+#import <IOSurface/IOSurface.h>
 
 
 @interface OwlIOSurfaceBuffer : OwlBuffer {
@@ -34,4 +35,4 @@
 
 @end
 
-#endif /* OWL_PLATFORM_APPLE */
+#endif /* OWL_HAS_IOSURFACE */

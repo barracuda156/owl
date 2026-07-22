@@ -30,8 +30,10 @@
 #import "OwlPasteboardDataDevice.h"
 #import "OwlSelection.h"
 
-#ifdef OWL_PLATFORM_APPLE
+#ifdef OWL_HAS_GCD
     #import "OwlZowlMachIpcV1.h"
+#endif
+#if defined(OWL_HAS_IOSURFACE) && defined(OWL_HAS_GCD)
     #import "OwlZowlIOSurfaceManagerV1.h"
 #endif
 
@@ -107,8 +109,8 @@
         return nil;
     }
 
-#ifdef OWL_PLATFORM_APPLE
-    // On Darwin, check in with the bootstrap service.
+#ifdef OWL_HAS_GCD
+    // On Darwin with GCD, check in with the bootstrap service.
     [OwlZowlMachIpcV1 bootstrapCheckInWithName: @"io.github.bugaevc.Owl"];
 #endif
 
@@ -127,9 +129,12 @@
 
     [OwlZwlrDataControlManagerV1 addGlobalToDisplay: _display];
 
-#ifdef OWL_PLATFORM_APPLE
-    // On Darwin, add some Mach-related globals.
+#ifdef OWL_HAS_GCD
+    // On Darwin with GCD, add Mach IPC global.
     [OwlZowlMachIpcV1 addGlobalToDisplay: _display];
+#endif
+#if defined(OWL_HAS_IOSURFACE) && defined(OWL_HAS_GCD)
+    // On Darwin with IOSurface support, add IOSurface manager.
     [OwlZowlIOSurfaceManagerV1 addGlobalToDisplay: _display];
 #endif
 
