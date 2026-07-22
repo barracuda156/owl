@@ -25,6 +25,7 @@
 #import "OwlZxdgShellV6.h"
 #import "OwlXdgWmBase.h"
 #import "OwlSeat.h"
+#import "OwlOutput.h"
 #import "OwlWlDataDeviceManager.h"
 #import "OwlZwlrDataControlManagerV1.h"
 #import "OwlPasteboardDataDevice.h"
@@ -126,6 +127,7 @@
     [OwlXdgWmBase addGlobalToDisplay: _display];
     [OwlWlDataDeviceManager addGlobalToDisplay: _display];
     [OwlSeat addGlobalToDisplay: _display];
+    [OwlOutput addGlobalToDisplay: _display];
 
     [OwlZwlrDataControlManagerV1 addGlobalToDisplay: _display];
 
