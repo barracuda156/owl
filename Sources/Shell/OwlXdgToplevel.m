@@ -251,6 +251,10 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     wl_client_flush(client);
 }
 
+- (OwlWindowWrapper *) windowWrapper {
+    return _window;
+}
+
 - (OwlKeyboard *) keyboard {
     struct wl_client *client = wl_resource_get_client(_resource);
     return [OwlKeyboard keyboardForClient: client];

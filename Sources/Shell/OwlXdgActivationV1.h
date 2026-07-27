@@ -16,29 +16,20 @@
  * along with Owl.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#import "OwlSurface.h"
-#import "OwlWindowWrapper.h"
+#import "OwlGlobal.h"
 #import <Cocoa/Cocoa.h>
 #import <wayland-server.h>
 
-@class OwlXdgSurface;
 
-@interface OwlXdgToplevel : NSObject<OwlSurfaceRole, NSWindowDelegate> {
+/* Implements xdg_activation_v1. Tokens are not validated: activate
+ * accepts any token, which is lenient but fine for a v1 implementation
+ * (foot only uses this for bell.urgent). */
+@interface OwlXdgActivationV1 : NSObject <OwlGlobal> {
     struct wl_resource *_resource;
-    OwlSurface *_surface;
-    OwlXdgSurface *_xdgSurface;
-    BOOL _configured;
-    BOOL _activated, _fullscreen, _resizing, _maximized;
-    BOOL _destroying;
-    OwlWindowWrapper *_window;
 }
 
-- (id) initWithResource: (struct wl_resource *) resource
-                surface: (OwlSurface *) surface
-             xdgSurface: (OwlXdgSurface *) xdgSurface;
+- (id) initWithResource: (struct wl_resource *) resource;
 
-- (void) sendConfigureWithSize: (NSSize) size;
-
-- (OwlWindowWrapper *) windowWrapper;
++ (void) addGlobalToDisplay: (struct wl_display *) display;
 
 @end
