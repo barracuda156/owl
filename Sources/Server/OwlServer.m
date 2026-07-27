@@ -26,6 +26,7 @@
 #import "OwlXdgWmBase.h"
 #import "OwlZxdgDecorationManagerV1.h"
 #import "OwlWpContentTypeManagerV1.h"
+#import "OwlWpSinglePixelBufferManagerV1.h"
 #import "OwlSeat.h"
 #import "OwlOutput.h"
 #import "OwlWlDataDeviceManager.h"
@@ -129,6 +130,7 @@
     [OwlXdgWmBase addGlobalToDisplay: _display];
     [OwlZxdgDecorationManagerV1 addGlobalToDisplay: _display];
     [OwlWpContentTypeManagerV1 addGlobalToDisplay: _display];
+    [OwlWpSinglePixelBufferManagerV1 addGlobalToDisplay: _display];
     [OwlWlDataDeviceManager addGlobalToDisplay: _display];
     [OwlSeat addGlobalToDisplay: _display];
     [OwlOutput addGlobalToDisplay: _display];
