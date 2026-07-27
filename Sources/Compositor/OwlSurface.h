@@ -72,6 +72,11 @@
 
 - (NSSize) geometrySizeAdjustements;
 
+// The current window geometry, in surface-local coordinates. Falls
+// back to the surface's own bounds if set_window_geometry was never
+// called (i.e. no explicit geometry was negotiated yet).
+- (NSRect) windowGeometry;
+
 /* Returns an NSImage of the current buffer content (for cursor use) */
 - (NSImage *) createCursorImage;
 

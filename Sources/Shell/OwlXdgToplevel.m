@@ -202,6 +202,30 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
         xdg_toplevel_destroy
     );
 
+    if (wl_resource_get_version(resource) >= XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION) {
+        struct wl_array capabilities;
+        wl_array_init(&capabilities);
+
+#define append_capability(value)                                \
+        do {                                                    \
+            void *ptr = wl_array_add(                           \
+                &capabilities,                                  \
+                sizeof(enum xdg_toplevel_wm_capabilities)        \
+            );                                                  \
+            *(enum xdg_toplevel_wm_capabilities *) ptr = (value); \
+        } while (0)
+
+        // No WINDOW_MENU: owl has no window menu to show.
+        append_capability(XDG_TOPLEVEL_WM_CAPABILITIES_MAXIMIZE);
+        append_capability(XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN);
+        append_capability(XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE);
+
+#undef append_capability
+
+        xdg_toplevel_send_wm_capabilities(resource, &capabilities);
+        wl_array_release(&capabilities);
+    }
+
     return self;
 }
 
@@ -228,6 +252,9 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     append(_fullscreen, XDG_TOPLEVEL_STATE_FULLSCREEN);
     append(_resizing, XDG_TOPLEVEL_STATE_RESIZING);
     append(_maximized, XDG_TOPLEVEL_STATE_MAXIMIZED);
+    if (wl_resource_get_version(_resource) >= XDG_TOPLEVEL_STATE_SUSPENDED_SINCE_VERSION) {
+        append(_suspended, XDG_TOPLEVEL_STATE_SUSPENDED);
+    }
 
 #undef append
 
@@ -235,6 +262,11 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
 }
 
 - (void) sendConfigureWithSize: (NSSize) size {
+    if (wl_resource_get_version(_resource) >= XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION) {
+        NSSize bounds = [[NSScreen mainScreen] visibleFrame].size;
+        xdg_toplevel_send_configure_bounds(_resource, bounds.width, bounds.height);
+    }
+
     struct wl_array states = [self makeStates];
     xdg_toplevel_send_configure(
         _resource,
@@ -319,6 +351,18 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
 - (void) windowDidResignMain: (NSNotification *) notification {
     if (_destroying) return;
     _activated = NO;
+    [self sendConfigureWithSize: NSZeroSize];
+}
+
+- (void) windowDidMiniaturize: (NSNotification *) notification {
+    if (_destroying) return;
+    _suspended = YES;
+    [self sendConfigureWithSize: NSZeroSize];
+}
+
+- (void) windowDidDeminiaturize: (NSNotification *) notification {
+    if (_destroying) return;
+    _suspended = NO;
     [self sendConfigureWithSize: NSZeroSize];
 }
 

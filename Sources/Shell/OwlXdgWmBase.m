@@ -19,6 +19,7 @@
 #import "OwlXdgWmBase.h"
 #import "OwlSurface.h"
 #import "OwlXdgSurface.h"
+#import "OwlXdgPositioner.h"
 #import "xdg-shell.h"
 #import <wayland-server.h>
 
@@ -38,22 +39,67 @@ static void xdg_wm_base_destroy(
     [self release];
 }
 
-/* Stub handlers for xdg_positioner - stores positioning hints for popups */
+static void xdg_positioner_destroy_resource(struct wl_resource *resource) {
+    OwlXdgPositioner *self = wl_resource_get_user_data(resource);
+    [self release];
+}
+
 static void xdg_positioner_destroy(struct wl_client *client, struct wl_resource *resource) {
     wl_resource_destroy(resource);
 }
+
 static void xdg_positioner_set_size(struct wl_client *client, struct wl_resource *resource,
-    int32_t width, int32_t height) { /* stub */ }
+    int32_t width, int32_t height)
+{
+    OwlXdgPositioner *self = wl_resource_get_user_data(resource);
+    self->_size = NSMakeSize(width, height);
+}
+
 static void xdg_positioner_set_anchor_rect(struct wl_client *client, struct wl_resource *resource,
-    int32_t x, int32_t y, int32_t width, int32_t height) { /* stub */ }
+    int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    OwlXdgPositioner *self = wl_resource_get_user_data(resource);
+    self->_anchorRect = NSMakeRect(x, y, width, height);
+}
+
 static void xdg_positioner_set_anchor(struct wl_client *client, struct wl_resource *resource,
-    uint32_t anchor) { /* stub */ }
+    uint32_t anchor)
+{
+    OwlXdgPositioner *self = wl_resource_get_user_data(resource);
+    self->_anchor = anchor;
+}
+
 static void xdg_positioner_set_gravity(struct wl_client *client, struct wl_resource *resource,
-    uint32_t gravity) { /* stub */ }
+    uint32_t gravity)
+{
+    OwlXdgPositioner *self = wl_resource_get_user_data(resource);
+    self->_gravity = gravity;
+}
+
 static void xdg_positioner_set_constraint_adjustment(struct wl_client *client, struct wl_resource *resource,
-    uint32_t constraint_adjustment) { /* stub */ }
+    uint32_t constraint_adjustment)
+{
+    OwlXdgPositioner *self = wl_resource_get_user_data(resource);
+    self->_constraintAdjustment = constraint_adjustment;
+}
+
 static void xdg_positioner_set_offset(struct wl_client *client, struct wl_resource *resource,
-    int32_t x, int32_t y) { /* stub */ }
+    int32_t x, int32_t y)
+{
+    OwlXdgPositioner *self = wl_resource_get_user_data(resource);
+    self->_offset = NSMakePoint(x, y);
+}
+
+static void xdg_positioner_set_reactive(struct wl_client *client, struct wl_resource *resource) {
+    // We don't reconstrain popups (no constraint_adjustment support),
+    // so there is nothing to react to; accept and ignore.
+}
+
+static void xdg_positioner_set_parent_size(struct wl_client *client, struct wl_resource *resource,
+    int32_t parent_width, int32_t parent_height) { /* unused: no constraint_adjustment support */ }
+
+static void xdg_positioner_set_parent_configure(struct wl_client *client, struct wl_resource *resource,
+    uint32_t serial) { /* unused: no constraint_adjustment support */ }
 
 static const struct xdg_positioner_interface xdg_positioner_impl = {
     .destroy = xdg_positioner_destroy,
@@ -62,7 +108,10 @@ static const struct xdg_positioner_interface xdg_positioner_impl = {
     .set_anchor = xdg_positioner_set_anchor,
     .set_gravity = xdg_positioner_set_gravity,
     .set_constraint_adjustment = xdg_positioner_set_constraint_adjustment,
-    .set_offset = xdg_positioner_set_offset
+    .set_offset = xdg_positioner_set_offset,
+    .set_reactive = xdg_positioner_set_reactive,
+    .set_parent_size = xdg_positioner_set_parent_size,
+    .set_parent_configure = xdg_positioner_set_parent_configure
 };
 
 static void xdg_wm_base_create_positioner(
@@ -73,10 +122,16 @@ static void xdg_wm_base_create_positioner(
     struct wl_resource *positioner_resource = wl_resource_create(
         client,
         &xdg_positioner_interface,
-        1,
+        wl_resource_get_version(resource),
         id
     );
-    wl_resource_set_implementation(positioner_resource, &xdg_positioner_impl, NULL, NULL);
+    OwlXdgPositioner *positioner = [OwlXdgPositioner new];
+    wl_resource_set_implementation(
+        positioner_resource,
+        &xdg_positioner_impl,
+        positioner,
+        xdg_positioner_destroy_resource
+    );
 }
 
 static void xdg_wm_base_get_xdg_surface(
@@ -88,7 +143,7 @@ static void xdg_wm_base_get_xdg_surface(
     struct wl_resource *xdg_surface_resource = wl_resource_create(
         client,
         &xdg_surface_interface,
-        1,
+        wl_resource_get_version(resource),
         id
     );
 
@@ -142,7 +197,7 @@ static void xdg_wm_base_bind(
     wl_global_create(
         display,
         &xdg_wm_base_interface,
-        1,
+        6,
         NULL,
         xdg_wm_base_bind
     );

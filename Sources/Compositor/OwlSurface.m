@@ -93,6 +93,14 @@ static void surface_damage_buffer_handler(
     [_pendingState setGeometry: geometry];
 }
 
+- (NSRect) windowGeometry {
+    NSRect geometry = [_currentState geometry];
+    if (geometry.size.width == 0) {
+        return [self bounds];
+    }
+    return geometry;
+}
+
 - (NSSize) geometrySizeAdjustements {
     NSSize currentSize = [_currentState geometry].size;
     if (currentSize.width == 0) {

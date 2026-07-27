@@ -28,7 +28,7 @@
     OwlSurface *_surface;
     OwlXdgSurface *_xdgSurface;
     BOOL _configured;
-    BOOL _activated, _fullscreen, _resizing, _maximized;
+    BOOL _activated, _fullscreen, _resizing, _maximized, _suspended;
     BOOL _destroying;
     OwlWindowWrapper *_window;
 }
