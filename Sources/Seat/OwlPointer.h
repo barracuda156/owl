@@ -50,6 +50,7 @@
 /* Cursor management */
 - (void) updateCursorFromSurface;
 - (void) applyCursor;
+- (void) setNamedCursor: (NSCursor *) cursor;
 + (void) notifyCursorSurfaceCommit: (struct wl_resource *) surfaceResource;
 
 @end

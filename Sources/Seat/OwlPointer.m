@@ -116,6 +116,23 @@ static void cursor_surface_destroy_notify(struct wl_listener *listener, void *da
     }
 }
 
+// Used by wp_cursor_shape_device_v1.set_shape to switch to a named
+// system cursor. Detaches any cursor surface exactly as the
+// surface_resource == NULL branch of pointer_set_cursor does, then
+// takes ownership of the given cursor.
+- (void) setNamedCursor: (NSCursor *) cursor {
+    if (_cursorSurface != NULL) {
+        wl_list_remove(&_cursorSurfaceDestroyListener.link);
+        wl_list_init(&_cursorSurfaceDestroyListener.link);
+        _cursorSurface = NULL;
+    }
+
+    [_cursor release];
+    _cursor = [cursor retain];
+
+    [self applyCursor];
+}
+
 static void pointer_set_cursor(
     struct wl_client *client,
     struct wl_resource *resource,

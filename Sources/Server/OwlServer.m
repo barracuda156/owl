@@ -28,6 +28,7 @@
 #import "OwlWpContentTypeManagerV1.h"
 #import "OwlWpSinglePixelBufferManagerV1.h"
 #import "OwlSeat.h"
+#import "OwlWpCursorShapeManagerV1.h"
 #import "OwlOutput.h"
 #import "OwlWlDataDeviceManager.h"
 #import "OwlZwlrDataControlManagerV1.h"
@@ -133,6 +134,7 @@
     [OwlWpSinglePixelBufferManagerV1 addGlobalToDisplay: _display];
     [OwlWlDataDeviceManager addGlobalToDisplay: _display];
     [OwlSeat addGlobalToDisplay: _display];
+    [OwlWpCursorShapeManagerV1 addGlobalToDisplay: _display];
     [OwlOutput addGlobalToDisplay: _display];
 
     [OwlZwlrDataControlManagerV1 addGlobalToDisplay: _display];
