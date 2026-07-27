@@ -25,6 +25,7 @@
 #import "OwlZxdgShellV6.h"
 #import "OwlXdgWmBase.h"
 #import "OwlXdgActivationV1.h"
+#import "OwlXdgToplevelIconManagerV1.h"
 #import "OwlZxdgDecorationManagerV1.h"
 #import "OwlWpContentTypeManagerV1.h"
 #import "OwlWpSinglePixelBufferManagerV1.h"
@@ -131,6 +132,7 @@
     [OwlZxdgShellV6 addGlobalToDisplay: _display];
     [OwlXdgWmBase addGlobalToDisplay: _display];
     [OwlXdgActivationV1 addGlobalToDisplay: _display];
+    [OwlXdgToplevelIconManagerV1 addGlobalToDisplay: _display];
     [OwlZxdgDecorationManagerV1 addGlobalToDisplay: _display];
     [OwlWpContentTypeManagerV1 addGlobalToDisplay: _display];
     [OwlWpSinglePixelBufferManagerV1 addGlobalToDisplay: _display];
