@@ -117,10 +117,21 @@ static void surface_damage_buffer_handler(
 }
 
 - (void) tearDownGL {
+    // Called unconditionally from -dealloc, including for surfaces
+    // that never had a GL context (shm-only clients like foot). Only
+    // touch global GL state if we actually own it: on Mac OS X 10.6
+    // ppc, CGLSetCurrentContext(NULL) crashes (a store to
+    // NULL+0xbdc) when invoked with no context current, taking the
+    // whole compositor down when a client disconnects.
+    if (_openGLContext == nil) {
+        return;
+    }
+    if ([NSOpenGLContext currentContext] == _openGLContext) {
+        [NSOpenGLContext clearCurrentContext];
+    }
     [_openGLContext clearDrawable];
     [_openGLContext release];
     _openGLContext = nil;
-    [NSOpenGLContext clearCurrentContext];
 }
 
 - (void) updateTrackingRect {
