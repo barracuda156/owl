@@ -326,6 +326,19 @@ static void surface_frame_handler(
     [callback release];
 }
 
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
+static void surface_offset_handler(
+    struct wl_client *client,
+    struct wl_resource *resource,
+    int32_t dx,
+    int32_t dy
+) {
+    // Since v5, attach's own x/y arguments are deprecated (must be
+    // sent as 0) in favor of this request; owl already ignores
+    // attach's x/y the same way, so ignore this too.
+}
+#endif
+
 static const struct wl_surface_interface surface_interface = {
     .destroy = surface_destroy_handler,
     .attach = surface_attach_handler,
@@ -336,7 +349,10 @@ static const struct wl_surface_interface surface_interface = {
     .set_input_region = surface_set_input_region_handler,
     .set_buffer_scale = surface_set_buffer_scale_handler,
     .set_buffer_transform = surface_set_buffer_transform_handler,
-    .damage_buffer = surface_damage_buffer_handler
+    .damage_buffer = surface_damage_buffer_handler,
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
+    .offset = surface_offset_handler
+#endif
 };
 
 - (id) initWithResource: (struct wl_resource *) resource {
@@ -351,6 +367,16 @@ static const struct wl_surface_interface surface_interface = {
     _callbacks = [NSMutableArray new];
     _currentState = [OwlSurfaceState new];
     _pendingState = [OwlSurfaceState new];
+
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
+    if (wl_resource_get_version(resource) >= WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION) {
+        wl_surface_send_preferred_buffer_scale(resource, 1);
+    }
+    if (wl_resource_get_version(resource) >= WL_SURFACE_PREFERRED_BUFFER_TRANSFORM_SINCE_VERSION) {
+        wl_surface_send_preferred_buffer_transform(resource, WL_OUTPUT_TRANSFORM_NORMAL);
+    }
+#endif
+
     return self;
 }
 

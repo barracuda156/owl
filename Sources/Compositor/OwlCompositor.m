@@ -21,6 +21,16 @@
 #import "OwlRegion.h"
 #import <Cocoa/Cocoa.h>
 
+// wl_surface.offset (v5) and preferred_buffer_scale/preferred_buffer_transform
+// (v6) require a wayland-server-protocol.h new enough to define this; the
+// Mac's ported libwayland version is unknown, so fall back to the version
+// owl has always advertised if it isn't there.
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
+#define OWL_WL_COMPOSITOR_VERSION 6
+#else
+#define OWL_WL_COMPOSITOR_VERSION 4
+#endif
+
 @implementation OwlCompositor
 
 static void compositor_create_surface_handler(
@@ -93,7 +103,7 @@ static void compositor_bind(
     wl_global_create(
         display,
         &wl_compositor_interface,
-        4,
+        OWL_WL_COMPOSITOR_VERSION,
         NULL,
         compositor_bind
     );
