@@ -25,12 +25,18 @@
 #ifdef OWL_PLATFORM_APPLE
 
 - (CGBitmapInfo) bitmapInfoForWlShmFormat: (enum wl_shm_format) shmFormat {
+    /* wl_shm ARGB8888/XRGB8888 are nominally little-endian-packed, but
+     * pixman (and thus cairo, GTK, foot, ...) packs pixels in host byte
+     * order on big-endian machines while still declaring these formats.
+     * Client and compositor always share the machine, so host order is
+     * the effective convention: on x86 this is identical to the Little
+     * variants, on ppc it renders BE client buffers correctly. */
     switch (shmFormat) {
     case WL_SHM_FORMAT_XRGB8888:
-        return kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little;
+        return kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Host;
     case WL_SHM_FORMAT_ARGB8888:
         // Wayland ARGB buffers use premultiplied alpha.
-        return kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
+        return kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host;
     default:
         NSLog(@"Unknown shm format");
         return 0;
