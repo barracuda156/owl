@@ -180,7 +180,13 @@
 // by -timeIntervalSinceReferenceDate, i.e. 1 January 2001.
 + (uint32_t) timestamp {
     NSTimeInterval ti = [[NSDate date] timeIntervalSinceReferenceDate];
-    return ti * 1000;
+    // ti * 1000 has exceeded UINT32_MAX since 2001-02-19, and
+    // converting an out-of-range double straight to uint32_t is
+    // undefined behavior: x86 happens to wrap modulo 2^32, but ppc
+    // saturates, pinning every timestamp at 4294967295. Truncate in
+    // integer arithmetic instead; Wayland timestamps may freely wrap.
+    uint64_t ms = (uint64_t)(ti * 1000.0);
+    return (uint32_t)ms;
 }
 
 // Explicitly flush our clients.
