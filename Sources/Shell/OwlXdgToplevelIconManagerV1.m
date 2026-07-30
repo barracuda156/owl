@@ -232,7 +232,9 @@ static void icon_manager_set_icon_handler(
     }
 
     [buffer invalidate];
-    [window setMiniwindowImage: [buffer createNSImage]];
+    NSImage *image = [buffer createNSImage];
+    [window setMiniwindowImage: image];
+    [image release];
 }
 
 static const struct xdg_toplevel_icon_manager_v1_interface icon_manager_impl = {
