@@ -31,8 +31,11 @@
 @public
     NSSize _size;
     NSRect _anchorRect;
-    enum xdg_positioner_anchor _anchor;
-    enum xdg_positioner_gravity _gravity;
+    // enum xdg_positioner_anchor / _gravity values; stored as plain
+    // uint32_t because the generated xdg-shell.h that defines those
+    // enums is not visible from this header.
+    uint32_t _anchor;
+    uint32_t _gravity;
     uint32_t _constraintAdjustment;
     NSPoint _offset;
 }
