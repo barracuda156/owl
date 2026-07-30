@@ -81,6 +81,10 @@ static void icon_buffer_destroy_notify(struct wl_listener *listener, void *data)
 @public
     struct wl_resource *_resource;
     NSMutableArray *_buffers;
+    // Set once the icon has been assigned to a toplevel; per the
+    // protocol, any further set_name/add_buffer must raise the
+    // immutable error.
+    BOOL _immutable;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource;
@@ -110,6 +114,15 @@ static void icon_set_name_handler(
     struct wl_resource *resource,
     const char *icon_name
 ) {
+    OwlXdgToplevelIconV1 *self = wl_resource_get_user_data(resource);
+    if (self->_immutable) {
+        wl_resource_post_error(
+            resource,
+            XDG_TOPLEVEL_ICON_V1_ERROR_IMMUTABLE,
+            "the icon has already been assigned to a toplevel"
+        );
+        return;
+    }
     // No icon themes on macOS; ignore.
 }
 
@@ -120,6 +133,14 @@ static void icon_add_buffer_handler(
     int32_t scale
 ) {
     OwlXdgToplevelIconV1 *self = wl_resource_get_user_data(resource);
+    if (self->_immutable) {
+        wl_resource_post_error(
+            resource,
+            XDG_TOPLEVEL_ICON_V1_ERROR_IMMUTABLE,
+            "the icon has already been assigned to a toplevel"
+        );
+        return;
+    }
 
     OwlXdgToplevelIconBufferV1 *entry = [OwlXdgToplevelIconBufferV1 new];
     entry->_bufferResource = buffer_resource;
@@ -210,6 +231,16 @@ static void icon_manager_set_icon_handler(
     struct wl_resource *icon_resource
 ) {
     OwlXdgToplevel *toplevel = wl_resource_get_user_data(toplevel_resource);
+    OwlXdgToplevelIconV1 *icon = nil;
+
+    if (icon_resource != NULL) {
+        icon = wl_resource_get_user_data(icon_resource);
+        // Per the protocol, the icon becomes immutable as soon as it
+        // is assigned to a toplevel, whether or not we manage to
+        // apply it below.
+        icon->_immutable = YES;
+    }
+
     OwlWindowWrapper *wrapper = [toplevel windowWrapper];
     if (wrapper == nil) {
         return;
@@ -219,12 +250,11 @@ static void icon_manager_set_icon_handler(
         return;
     }
 
-    if (icon_resource == NULL) {
+    if (icon == nil) {
         [window setMiniwindowImage: nil];
         return;
     }
 
-    OwlXdgToplevelIconV1 *icon = wl_resource_get_user_data(icon_resource);
     OwlBuffer *buffer = [icon largestBuffer];
     if (buffer == nil) {
         [window setMiniwindowImage: nil];
