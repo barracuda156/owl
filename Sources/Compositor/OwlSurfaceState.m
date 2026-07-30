@@ -24,6 +24,7 @@
 
 - (id) init {
     _callbacks = [NSMutableArray new];
+    _presentationFeedbacks = [NSMutableArray new];
     _damage = [NSMutableArray new];
     return self;
 }
@@ -43,6 +44,7 @@
 - (void) dealloc {
     [_buffer release];
     [_callbacks release];
+    [_presentationFeedbacks release];
     [_damage release];
     [super dealloc];
 }
@@ -63,6 +65,14 @@
 
 - (void) addCallback: (OwlCallback *) callback {
     [_callbacks addObject: callback];
+}
+
+- (NSArray *) presentationFeedbacks {
+    return _presentationFeedbacks;
+}
+
+- (void) addPresentationFeedback: (OwlWpPresentationFeedback *) feedback {
+    [_presentationFeedbacks addObject: feedback];
 }
 
 - (NSArray *) damage {

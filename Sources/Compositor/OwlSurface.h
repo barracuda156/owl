@@ -21,6 +21,7 @@
 
 @class OwlBuffer;
 @class OwlSurfaceState;
+@class OwlWpPresentationFeedback;
 
 @protocol OwlSurfaceRole
 
@@ -48,6 +49,13 @@
     // further state changes and commits, only to be sent
     // out during the next -drawRect: call.
     NSMutableArray *_callbacks;
+
+    // wp_presentation feedbacks, collected and moved here
+    // the same way as the callbacks above, except that a
+    // commit that supersedes a still-undrawn one discards
+    // the queued feedbacks instead of keeping them: they
+    // complete with either presented or discarded.
+    NSMutableArray *_presentationFeedbacks;
 
     // The current state of this surface. This includes
     // things such as the attached buffer and an array
@@ -82,5 +90,12 @@
 
 /* Send out and clear any pending frame callbacks. */
 - (void) fireCallbacks;
+
+/* Queue a wp_presentation feedback for the next commit. */
+- (void) addPresentationFeedback: (OwlWpPresentationFeedback *) feedback;
+
+/* Complete and clear the queued presentation feedbacks. */
+- (void) firePresentationFeedbacksPresented;
+- (void) discardPresentationFeedbacks;
 
 @end

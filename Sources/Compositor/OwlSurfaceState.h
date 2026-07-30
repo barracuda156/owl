@@ -20,11 +20,13 @@
 
 @class OwlBuffer;
 @class OwlCallback;
+@class OwlWpPresentationFeedback;
 
 @interface OwlSurfaceState : NSObject {
     OwlBuffer *_buffer;
     // TODO: dx, dy
     NSMutableArray *_callbacks;
+    NSMutableArray *_presentationFeedbacks;
     NSMutableArray *_damage;
     NSRect _geometry;
 }
@@ -37,6 +39,9 @@
 
 - (NSArray *) callbacks;
 - (void) addCallback: (OwlCallback *) callback;
+
+- (NSArray *) presentationFeedbacks;
+- (void) addPresentationFeedback: (OwlWpPresentationFeedback *) feedback;
 
 - (NSArray *) damage;
 - (void) addDamage: (NSRect) damageRect;

@@ -18,6 +18,7 @@
 
 #import "OwlSurface.h"
 #import "OwlCallback.h"
+#import "OwlWpPresentation.h"
 #import "OwlPointer.h"
 #import "OwlKeyboard.h"
 #import "OwlServer.h"
@@ -42,6 +43,15 @@ static void surface_destroy_handler(
 
 static void surface_destroy(struct wl_resource *resource) {
     OwlSurface *self = wl_resource_get_user_data(resource);
+    // Neither the queued presentation feedbacks nor those still in
+    // the pending state can ever be presented now; let the client
+    // know. (On an abrupt disconnect the feedback resources may be
+    // destroyed already, which makes these no-ops.)
+    [self discardPresentationFeedbacks];
+    for (OwlWpPresentationFeedback *feedback
+             in [self->_pendingState presentationFeedbacks]) {
+        [feedback sendDiscarded];
+    }
     [self removeFromSuperview];
     [self release];
 }
@@ -188,6 +198,14 @@ static void surface_damage_buffer_handler(
 
     [_callbacks addObjectsFromArray: [_currentState callbacks]];
 
+    // Any presentation feedbacks still queued at this point belong
+    // to an earlier commit whose content never made it to the
+    // screen; this commit supersedes it, so they are discarded.
+    // Then queue the feedbacks of this new commit.
+    [self discardPresentationFeedbacks];
+    [_presentationFeedbacks addObjectsFromArray:
+                                [_currentState presentationFeedbacks]];
+
     if (tearDownGL) {
         [self tearDownGL];
     }
@@ -196,8 +214,10 @@ static void surface_damage_buffer_handler(
         [_role unmap];
         // We have no buffer, so -drawRect: is not going to run;
         // fire any pending frame callbacks so the client doesn't
-        // wait for them forever.
+        // wait for them forever, and discard the presentation
+        // feedbacks - this content update will never be shown.
         [self fireCallbacks];
+        [self discardPresentationFeedbacks];
         return;
     }
 
@@ -234,9 +254,12 @@ static void surface_damage_buffer_handler(
     // won't cause a redraw (e.g. a commit with no damage), the
     // callbacks would never fire from -drawRect:, deadlocking
     // clients that wait for them before rendering. Fire them
-    // right away instead.
+    // right away instead. The committed content is identical to
+    // what is already on the screen, so count the presentation
+    // feedbacks as presented right away too.
     if (!willRedraw) {
         [self fireCallbacks];
+        [self firePresentationFeedbacksPresented];
     }
 }
 
@@ -250,6 +273,32 @@ static void surface_damage_buffer_handler(
     }
     [_callbacks removeAllObjects];
     [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (void) firePresentationFeedbacksPresented {
+    if ([_presentationFeedbacks count] == 0) {
+        return;
+    }
+    for (OwlWpPresentationFeedback *feedback in _presentationFeedbacks) {
+        [feedback sendPresented];
+    }
+    [_presentationFeedbacks removeAllObjects];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (void) discardPresentationFeedbacks {
+    if ([_presentationFeedbacks count] == 0) {
+        return;
+    }
+    for (OwlWpPresentationFeedback *feedback in _presentationFeedbacks) {
+        [feedback sendDiscarded];
+    }
+    [_presentationFeedbacks removeAllObjects];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (void) addPresentationFeedback: (OwlWpPresentationFeedback *) feedback {
+    [_pendingState addPresentationFeedback: feedback];
 }
 
 static void surface_commit_handler(
@@ -271,8 +320,10 @@ static void surface_commit_handler(
 
     [[_currentState buffer] drawInRect: [self bounds]];
 
-    // We have painted; so send out all callbacks.
+    // We have painted; so send out all callbacks
+    // and presentation feedbacks.
     [self fireCallbacks];
+    [self firePresentationFeedbacksPresented];
 
     [[self window] invalidateShadow];
 }
@@ -365,6 +416,7 @@ static const struct wl_surface_interface surface_interface = {
         surface_destroy
     );
     _callbacks = [NSMutableArray new];
+    _presentationFeedbacks = [NSMutableArray new];
     _currentState = [OwlSurfaceState new];
     _pendingState = [OwlSurfaceState new];
 
@@ -383,6 +435,7 @@ static const struct wl_surface_interface surface_interface = {
 - (void) dealloc {
     [self tearDownGL];
     [_callbacks release];
+    [_presentationFeedbacks release];
     [_currentState release];
     [_pendingState release];
     [super dealloc];
