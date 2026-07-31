@@ -24,6 +24,8 @@
 #import "OwlServer.h"
 #import "OwlBuffer.h"
 #import "OwlSurfaceState.h"
+#import "OwlWlDataDevice.h"
+#import "OwlDragDataSource.h"
 #import <wayland-server.h>
 #import <Cocoa/Cocoa.h>
 
@@ -420,6 +422,14 @@ static const struct wl_surface_interface surface_interface = {
     _currentState = [OwlSurfaceState new];
     _pendingState = [OwlSurfaceState new];
 
+    // Accept files and text dragged in from other applications;
+    // they are forwarded to the client as wl_data_device
+    // drag-and-drop events.
+    [self registerForDraggedTypes:
+              [NSArray arrayWithObjects: NSFilenamesPboardType,
+                                         NSStringPboardType,
+                                         nil]];
+
 #ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION
     if (wl_resource_get_version(resource) >= WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION) {
         wl_surface_send_preferred_buffer_scale(resource, 1);
@@ -640,6 +650,72 @@ static const struct wl_surface_interface surface_interface = {
 - (void) flagsChanged: (NSEvent *) event {
     [[self keyboard] handleFlagsChanged: event];
     [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (OwlWlDataDevice *) dataDevice {
+    struct wl_client *client = wl_resource_get_client(_resource);
+    return [OwlWlDataDevice dataDeviceForClient: client];
+}
+
+- (NSPoint) pointOfDraggingInfo: (id <NSDraggingInfo>) sender {
+    NSPoint point = [self convertPoint: [sender draggingLocation]
+                              fromView: nil];
+    point.y = [self bounds].size.height - point.y;
+    return point;
+}
+
+- (NSDragOperation) draggingEntered: (id <NSDraggingInfo>) sender {
+    OwlWlDataDevice *dataDevice = [self dataDevice];
+    if (dataDevice == nil) {
+        return NSDragOperationNone;
+    }
+
+    OwlDragDataSource *dataSource = [OwlDragDataSource alloc];
+    dataSource = [dataSource initWithPasteboard:
+                                 [sender draggingPasteboard]];
+    if ([[dataSource mimeTypes] count] == 0) {
+        // Nothing on the drag pasteboard we can represent.
+        [dataSource release];
+        return NSDragOperationNone;
+    }
+
+    [dataDevice dndEnterSurface: self
+                        atPoint: [self pointOfDraggingInfo: sender]
+                 withDataSource: dataSource];
+    // The offer holds on to the data source now.
+    [dataSource release];
+    [[OwlServer sharedServer] flushClientsLater];
+    return NSDragOperationCopy;
+}
+
+- (NSDragOperation) draggingUpdated: (id <NSDraggingInfo>) sender {
+    OwlWlDataDevice *dataDevice = [self dataDevice];
+    if (![dataDevice isDndInProgress]) {
+        return NSDragOperationNone;
+    }
+    [dataDevice dndMotionAtPoint: [self pointOfDraggingInfo: sender]];
+    [[OwlServer sharedServer] flushClientsLater];
+    return NSDragOperationCopy;
+}
+
+- (void) draggingExited: (id <NSDraggingInfo>) sender {
+    [[self dataDevice] dndLeave];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (BOOL) prepareForDragOperation: (id <NSDraggingInfo>) sender {
+    return [[self dataDevice] isDndInProgress];
+}
+
+- (BOOL) performDragOperation: (id <NSDraggingInfo>) sender {
+    OwlWlDataDevice *dataDevice = [self dataDevice];
+    if (![dataDevice isDndInProgress]) {
+        return NO;
+    }
+    [dataDevice dndMotionAtPoint: [self pointOfDraggingInfo: sender]];
+    [dataDevice dndDrop];
+    [[OwlServer sharedServer] flushClientsLater];
+    return YES;
 }
 
 // The Edit menu items send these to the first responder, which

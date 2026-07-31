@@ -21,14 +21,32 @@
 #import <wayland-server.h>
 
 
+@class OwlDataSource;
+@class OwlSurface;
+@class OwlWlDataOffer;
+
 @interface OwlWlDataDevice : OwlDataDevice {
     NSUInteger _focusCount;
     BOOL _selectionHasChangedSinceLastFocused;
+    // The offer of the drag-and-drop session currently hovering
+    // over one of this client's surfaces, if any.
+    OwlWlDataOffer *_dndOffer;
 }
 
 + (OwlWlDataDevice *) dataDeviceForClient: (struct wl_client *) client;
 
 - (void) focused;
 - (void) unfocused;
+
+/* Compositor-initiated drag-and-drop (e.g. a file dragged in
+ * from the Finder), following the same enter/motion/leave/drop
+ * shape as Cocoa's NSDraggingDestination. */
+- (void) dndEnterSurface: (OwlSurface *) surface
+                 atPoint: (NSPoint) point
+          withDataSource: (OwlDataSource *) dataSource;
+- (void) dndMotionAtPoint: (NSPoint) point;
+- (void) dndLeave;
+- (void) dndDrop;
+- (BOOL) isDndInProgress;
 
 @end

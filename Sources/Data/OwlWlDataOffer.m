@@ -56,7 +56,9 @@ static void data_offer_finish_handler(
     struct wl_client *client,
     struct wl_resource *resource
 ) {
-    // We don't support drag-and-drop yet; nothing to finish.
+    // Our drag-and-drop sources are compositor-internal (the drag
+    // pasteboard), so there is no client source to notify of the
+    // finish; nothing to do.
 }
 
 static void data_offer_set_actions_handler(
@@ -65,7 +67,15 @@ static void data_offer_set_actions_handler(
     uint32_t dnd_actions,
     uint32_t preferred_action
 ) {
-    // We don't support drag-and-drop yet; ignore the actions.
+    OwlWlDataOffer *self = wl_resource_get_user_data(resource);
+    // Copy is the only action we ever offer; confirm it so the
+    // client can proceed with the drop.
+    if (self->_dnd && wl_resource_get_version(resource) >= 3) {
+        wl_data_offer_send_action(
+            resource,
+            WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY
+        );
+    }
 }
 
 static const struct wl_data_offer_interface data_offer_impl = {
@@ -91,6 +101,16 @@ static const struct wl_data_offer_interface data_offer_impl = {
 
 - (void) addMimeType: (NSString *) mimeType {
     wl_data_offer_send_offer(_resource, [mimeType UTF8String]);
+}
+
+- (void) markAsDndOffer {
+    _dnd = YES;
+    if (wl_resource_get_version(_resource) >= 3) {
+        wl_data_offer_send_source_actions(
+            _resource,
+            WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY
+        );
+    }
 }
 
 @end

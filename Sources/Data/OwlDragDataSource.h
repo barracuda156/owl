@@ -16,18 +16,23 @@
  * along with Owl.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#import "OwlDataOffer.h"
 #import <Cocoa/Cocoa.h>
-#import <wayland-server.h>
+#import "OwlDataSource.h"
 
 
-@interface OwlWlDataOffer : OwlDataOffer {
-    BOOL _dnd;
+// A data source representing the content of a Cocoa drag session,
+// e.g. files dragged in from the Finder (offered as text/uri-list)
+// or a piece of text.
+//
+// Unlike OwlPasteboardDataSource, the content is snapshotted at
+// creation time: the client asks for the data asynchronously,
+// typically only after the drop, when the drag pasteboard may
+// have already been cleared.
+@interface OwlDragDataSource : OwlDataSource {
+    NSData *_uriListData;
+    NSData *_textData;
 }
 
-/* Mark this offer as a drag-and-drop offer (as opposed to a
- * selection offer): advertises source_actions to version 3+
- * clients and makes us answer their set_actions requests. */
-- (void) markAsDndOffer;
+- (id) initWithPasteboard: (NSPasteboard *) pboard;
 
 @end

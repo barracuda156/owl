@@ -21,6 +21,8 @@
 #import "OwlWlDataSource.h"
 #import "OwlWlDataOffer.h"
 #import "OwlSelection.h"
+#import "OwlServer.h"
+#import "OwlSurface.h"
 
 
 @implementation OwlWlDataDevice
@@ -110,6 +112,7 @@ static const struct wl_data_device_interface data_device_impl = {
 
 - (void) dealloc {
     [[OwlSelection clipboard] removeDataDevice: self];
+    [_dndOffer release];
     [super dealloc];
 }
 
@@ -154,6 +157,72 @@ static const struct wl_data_device_interface data_device_impl = {
 
 - (void) unfocused {
     _focusCount--;
+}
+
+- (void) dndEnterSurface: (OwlSurface *) surface
+                 atPoint: (NSPoint) point
+          withDataSource: (OwlDataSource *) dataSource
+{
+    // In case Cocoa never told us the previous session left.
+    [self dndLeave];
+
+    struct wl_resource *offer_resource = wl_resource_create(
+        wl_resource_get_client(_resource),
+        &wl_data_offer_interface,
+        wl_resource_get_version(_resource),
+        0
+    );
+    wl_data_device_send_data_offer(_resource, offer_resource);
+    // Creating an OwlDataOffer sends out the MIME types automatically.
+    _dndOffer = [[OwlWlDataOffer alloc] initWithResource: offer_resource
+                                              dataSource: dataSource];
+    [_dndOffer markAsDndOffer];
+    wl_data_device_send_enter(
+        _resource,
+        [[OwlServer sharedServer] nextSerial],
+        [surface resource],
+        wl_fixed_from_double(point.x),
+        wl_fixed_from_double(point.y),
+        offer_resource
+    );
+}
+
+- (void) dndMotionAtPoint: (NSPoint) point {
+    if (_dndOffer == nil) {
+        return;
+    }
+    wl_data_device_send_motion(
+        _resource,
+        [OwlServer timestamp],
+        wl_fixed_from_double(point.x),
+        wl_fixed_from_double(point.y)
+    );
+}
+
+- (void) dndLeave {
+    if (_dndOffer == nil) {
+        return;
+    }
+    wl_data_device_send_leave(_resource);
+    [_dndOffer release];
+    _dndOffer = nil;
+}
+
+- (void) dndDrop {
+    if (_dndOffer == nil) {
+        return;
+    }
+    wl_data_device_send_drop(_resource);
+    // From here the offer is the client's: it receives the data,
+    // then destroys the offer resource, whose destructor drops
+    // the remaining reference (keeping the data source alive
+    // until then).
+    [_dndOffer release];
+    _dndOffer = nil;
+}
+
+- (BOOL) isDndInProgress {
+    return _dndOffer != nil;
 }
 
 @end
