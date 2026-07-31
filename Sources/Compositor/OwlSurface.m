@@ -609,4 +609,18 @@ static const struct wl_surface_interface surface_interface = {
     [[OwlServer sharedServer] flushClientsLater];
 }
 
+// The Edit menu items send these to the first responder, which
+// is us whenever a client surface is focused. We cannot read or
+// write the client's selection ourselves, so we type the keys
+// the client binds its own clipboard actions to.
+- (IBAction) copy: (id) sender {
+    [[self keyboard] sendCopyKey];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (IBAction) paste: (id) sender {
+    [[self keyboard] sendPasteKey];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
 @end

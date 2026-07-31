@@ -21,7 +21,49 @@
 
 @implementation OwlAppDelegate
 
+// The main menu nib predates copy/paste support, so add the Edit
+// menu here. The items target the first responder, which is the
+// focused client's view; it types the client's own clipboard keys
+// in response (see -[OwlSurface copy:]).
+- (void) installEditMenu {
+    NSMenu *mainMenu = [NSApp mainMenu];
+    NSMenu *editMenu;
+    NSMenuItem *item;
+    NSInteger index;
+
+    if (mainMenu == nil || [mainMenu indexOfItemWithTitle: @"Edit"] >= 0) {
+        return;
+    }
+
+    editMenu = [[NSMenu alloc] initWithTitle: @"Edit"];
+
+    item = [[NSMenuItem alloc] initWithTitle: @"Copy"
+                                      action: @selector(copy:)
+                               keyEquivalent: @"c"];
+    [editMenu addItem: item];
+    [item release];
+
+    item = [[NSMenuItem alloc] initWithTitle: @"Paste"
+                                      action: @selector(paste:)
+                               keyEquivalent: @"v"];
+    [editMenu addItem: item];
+    [item release];
+
+    item = [[NSMenuItem alloc] initWithTitle: @"Edit"
+                                      action: NULL
+                               keyEquivalent: @""];
+    [item setSubmenu: editMenu];
+    [editMenu release];
+
+    // Conventionally right after the application menu.
+    index = [mainMenu numberOfItems] > 0 ? 1 : 0;
+    [mainMenu insertItem: item atIndex: index];
+    [item release];
+}
+
 - (void) applicationDidFinishLaunching: (NSNotification *) notification {
+    [self installEditMenu];
+
     // Instantiate the server. If sucessful, this will
     // automatically start serving the clients.
     OwlServer *server = [OwlServer sharedServer];

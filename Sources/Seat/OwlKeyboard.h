@@ -47,4 +47,11 @@
  * focus; calling this from every event self-heals the state. */
 - (void) reconcileModifierFlags: (NSUInteger) flags;
 
+/* Type the key bound to XF86Copy/XF86Paste in our keymap. The
+ * clients bind these keysyms to their own clipboard copy/paste
+ * actions (foot, GTK and Qt all do by default), which lets the
+ * Edit menu invoke them without guessing client key chords. */
+- (void) sendCopyKey;
+- (void) sendPasteKey;
+
 @end

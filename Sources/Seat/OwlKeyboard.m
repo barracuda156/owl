@@ -45,6 +45,10 @@
 #define OWL_KEY_CAPSLOCK   58
 #define OWL_KEY_LEFTMETA   125
 
+/* Evdev keycodes bound to XF86Copy/XF86Paste in our keymap.xkb. */
+#define OWL_KEY_COPY   133
+#define OWL_KEY_PASTE  135
+
 /* The keyboard repeat parameters we advertise to version 4+
  * clients; the clients implement the repeating themselves. */
 #define OWL_KEY_REPEAT_RATE  25   /* keys per second */
@@ -464,6 +468,16 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
 
 - (void) handleFlagsChanged: (NSEvent *) event {
     [self reconcileModifierFlags: [event modifierFlags]];
+}
+
+- (void) sendCopyKey {
+    [self sendKeyRaw: OWL_KEY_COPY isPressed: YES];
+    [self sendKeyRaw: OWL_KEY_COPY isPressed: NO];
+}
+
+- (void) sendPasteKey {
+    [self sendKeyRaw: OWL_KEY_PASTE isPressed: YES];
+    [self sendKeyRaw: OWL_KEY_PASTE isPressed: NO];
 }
 
 - (void) sendEnterSurface: (OwlSurface *) surface {
