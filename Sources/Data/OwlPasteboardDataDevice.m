@@ -31,13 +31,28 @@
     OwlPasteboardDataSource *dataSource = [OwlPasteboardDataSource alloc];
     dataSource = [dataSource initWithPasteboard: _pasteboard];
 
+    _lastChangeCount = [_pasteboard changeCount];
     [_selection setDataSource: dataSource];
     [dataSource release];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
-// FIXME: This is only called by our own offers when they get cancelled,
-// which means we miss refreshes when we don't own the pasteboard.
+// The pasteboard offers no notification when another application
+// changes it; the owner-change callback only reaches us while one of
+// our own offers is the owner. So whenever we become the active
+// application - which the user must do before they can paste into a
+// client anyway - compare the change count and re-publish if another
+// application has taken the pasteboard since we last looked.
+- (void) applicationDidBecomeActive: (NSNotification *) notification {
+    if ([_pasteboard changeCount] == _lastChangeCount) {
+        return;
+    }
+    [self publishDataSource];
+}
+
+// Notify this data device that the pasteboard may have been refreshed.
+// Called by our own offers when they get cancelled, i.e. when another
+// application takes over a pasteboard that we used to own.
 - (void) pasteboardRefreshed {
     if (_ignoreRefreshes) {
         return;
@@ -62,6 +77,11 @@
     _pasteboard = [pboard retain];
     _selection = [selection retain];
     [selection addDataDevice: self];
+    [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(applicationDidBecomeActive:)
+               name: NSApplicationDidBecomeActiveNotification
+             object: nil];
     // On startup, initialize selection with pasteboard contents.
     // We assume no clients have connected yet.
     [self pasteboardRefreshed];
@@ -69,6 +89,7 @@
 }
 
 - (void) dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver: self];
     [_pasteboard release];
     [_selection removeDataDevice: self];
     [_selection release];
@@ -88,6 +109,7 @@
 
     if (dataSource == nil) {
         [_pasteboard clearContents];
+        _lastChangeCount = [_pasteboard changeCount];
         return;
     }
 
@@ -101,6 +123,9 @@
     _currentOffer = [_currentOffer initWithDataDevice: self
                                            dataSource: dataSource];
     _ignoreRefreshes = NO;
+    // Declaring our offer's types has bumped the change count; record
+    // it so this write of ours doesn't read as an external change.
+    _lastChangeCount = [_pasteboard changeCount];
 }
 
 @end

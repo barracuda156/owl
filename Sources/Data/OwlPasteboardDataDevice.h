@@ -28,6 +28,10 @@
     OwlSelection *_selection;
     OwlPasteboardDataOffer *_currentOffer;
     BOOL _ignoreRefreshes;
+    // The pasteboard change count as of the last time we were in
+    // sync with it, used to detect changes made by other
+    // applications, which generate no notification of any kind.
+    NSInteger _lastChangeCount;
 }
 
 - (id) initWithPasteboard: (NSPasteboard *) pasteboard
