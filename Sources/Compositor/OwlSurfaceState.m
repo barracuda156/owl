@@ -38,6 +38,7 @@
     self = [self init];
     _buffer = [previousState->_buffer retain];
     _geometry = previousState->_geometry;
+    _inputRegion = [previousState->_inputRegion retain];
     return self;
 }
 
@@ -46,6 +47,7 @@
     [_callbacks release];
     [_presentationFeedbacks release];
     [_damage release];
+    [_inputRegion release];
     [super dealloc];
 }
 
@@ -90,6 +92,16 @@
 
 - (void) setGeometry: (NSRect) geometry {
     _geometry = geometry;
+}
+
+- (NSData *) inputRegion {
+    return _inputRegion;
+}
+
+- (void) setInputRegion: (NSData *) inputRegion {
+    [inputRegion retain];
+    [_inputRegion release];
+    _inputRegion = inputRegion;
 }
 
 @end

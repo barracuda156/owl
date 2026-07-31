@@ -29,6 +29,9 @@
     NSMutableArray *_presentationFeedbacks;
     NSMutableArray *_damage;
     NSRect _geometry;
+    // The input region as an OwlRegion op list snapshot, or nil
+    // when the whole surface accepts input (the default).
+    NSData *_inputRegion;
 }
 
 - (id) init;
@@ -48,5 +51,8 @@
 
 - (NSRect) geometry;
 - (void) setGeometry: (NSRect) geometry;
+
+- (NSData *) inputRegion;
+- (void) setInputRegion: (NSData *) inputRegion;
 
 @end

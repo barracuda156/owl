@@ -33,6 +33,21 @@ static void region_destroy_handler(
     wl_resource_destroy(resource);
 }
 
+static void region_append_op(
+    struct wl_resource *resource,
+    BOOL isAdd,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height
+) {
+    OwlRegion *self = wl_resource_get_user_data(resource);
+    struct OwlRegionOp op;
+    op.isAdd = isAdd;
+    op.rect = NSMakeRect(x, y, width, height);
+    [self->_ops appendBytes: &op length: sizeof(op)];
+}
+
 static void region_add_handler(
     struct wl_client *client,
     struct wl_resource *resource,
@@ -41,7 +56,7 @@ static void region_add_handler(
     int32_t width,
     int32_t height
 ) {
-    // TODO
+    region_append_op(resource, YES, x, y, width, height);
 }
 
 static void region_subtract_handler(
@@ -52,7 +67,7 @@ static void region_subtract_handler(
     int32_t width,
     int32_t height
 ) {
-    // TODO
+    region_append_op(resource, NO, x, y, width, height);
 }
 
 static const struct wl_region_interface region_impl = {
@@ -64,6 +79,7 @@ static const struct wl_region_interface region_impl = {
 
 - (id) initWithResource: (struct wl_resource *) resource {
     _resource = resource;
+    _ops = [NSMutableData new];
     wl_resource_set_implementation(
         resource,
         &region_impl,
@@ -71,6 +87,40 @@ static const struct wl_region_interface region_impl = {
         region_destroy
     );
     return self;
+}
+
+- (void) dealloc {
+    [_ops release];
+    [super dealloc];
+}
+
+- (NSData *) opsSnapshot {
+    return [NSData dataWithData: _ops];
+}
+
++ (BOOL) ops: (NSData *) ops containPoint: (NSPoint) point {
+    const struct OwlRegionOp *op = [ops bytes];
+    NSUInteger i, count = [ops length] / sizeof(*op);
+    BOOL contained = NO;
+
+    for (i = 0; i < count; i++) {
+        if (NSPointInRect(point, op[i].rect)) {
+            contained = op[i].isAdd;
+        }
+    }
+    return contained;
+}
+
++ (BOOL) opsCanEverContainPoints: (NSData *) ops {
+    const struct OwlRegionOp *op = [ops bytes];
+    NSUInteger i, count = [ops length] / sizeof(*op);
+
+    for (i = 0; i < count; i++) {
+        if (op[i].isAdd) {
+            return YES;
+        }
+    }
+    return NO;
 }
 
 @end

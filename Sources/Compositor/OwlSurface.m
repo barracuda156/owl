@@ -24,6 +24,7 @@
 #import "OwlServer.h"
 #import "OwlBuffer.h"
 #import "OwlSurfaceState.h"
+#import "OwlRegion.h"
 #import "OwlWlDataDevice.h"
 #import "OwlDragDataSource.h"
 #import <wayland-server.h>
@@ -154,9 +155,53 @@ static void surface_damage_buffer_handler(
     _openGLContext = nil;
 }
 
+// Whether this surface accepts pointer input at the given point
+// (in surface-local coordinates), per its wl_surface input region.
+- (BOOL) acceptsPointerInputAtPoint: (NSPoint) point {
+    NSData *region = [_currentState inputRegion];
+    if (region == nil) {
+        // No region set: the whole surface accepts input.
+        return YES;
+    }
+    return [OwlRegion ops: region containPoint: point];
+}
+
+- (BOOL) acceptsAnyPointerInput {
+    NSData *region = [_currentState inputRegion];
+    if (region == nil) {
+        return YES;
+    }
+    return [OwlRegion opsCanEverContainPoints: region];
+}
+
+// Honor the input region during hit testing: returning nil makes
+// Cocoa fall through to whatever is underneath, e.g. the parent
+// surface below an input-transparent subsurface overlay (foot's
+// scrollback indicator sets an empty input region and aborts if it
+// receives pointer focus anyway).
+- (NSView *) hitTest: (NSPoint) point {
+    NSView *result = [super hitTest: point];
+    if (result != self) {
+        // A subview (e.g. a subsurface) was hit; its own hit test
+        // has already had its say.
+        return result;
+    }
+    NSPoint local = [self convertPoint: point fromView: [self superview]];
+    local.y = [self bounds].size.height - local.y;
+    if (![self acceptsPointerInputAtPoint: local]) {
+        return nil;
+    }
+    return result;
+}
+
 - (void) updateTrackingRect {
     if (_trackingRectTag != 0) {
         [self removeTrackingRect: _trackingRectTag];
+        _trackingRectTag = 0;
+    }
+    if (![self acceptsAnyPointerInput]) {
+        // Fully input-transparent: no enter/leave events either.
+        return;
     }
     _trackingRectTag = [self addTrackingRect: [self bounds]
                                        owner: self
@@ -192,11 +237,20 @@ static void surface_damage_buffer_handler(
         [oldBuffer notifyDetached];
     }
 
+    // Compared by pointer below, never dereferenced: the old data
+    // may die with the old state.
+    NSData *oldInputRegion = [_currentState inputRegion];
+
     // Actually set the pending state as our new state.
     [_currentState release];
     _currentState = _pendingState;
     _pendingState = [OwlSurfaceState alloc];
     _pendingState = [_pendingState initWithPreviousState: _currentState];
+
+    if ([_currentState inputRegion] != oldInputRegion) {
+        // The input region changed; reconsider the tracking rect.
+        [self updateTrackingRect];
+    }
 
     [_callbacks addObjectsFromArray: [_currentState callbacks]];
 
@@ -343,7 +397,16 @@ static void surface_set_input_region_handler(
     struct wl_resource *resource,
     struct wl_resource *region_resource
 ) {
-    // TODO
+    OwlSurface *self = wl_resource_get_user_data(resource);
+    NSData *ops = nil;
+    if (region_resource != NULL) {
+        OwlRegion *region = wl_resource_get_user_data(region_resource);
+        // Snapshot: the client may destroy the region object right
+        // after this request, but the input region is double-buffered
+        // state that outlives it.
+        ops = [region opsSnapshot];
+    }
+    [self->_pendingState setInputRegion: ops];
 }
 
 static void surface_set_buffer_scale_handler(
@@ -488,6 +551,12 @@ static const struct wl_surface_interface surface_interface = {
     _exitedDuringDrag = NO;
     [[self window] setAcceptsMouseMovedEvents: YES];
     NSPoint point = [self pointOfEvent: event];
+    if (![self acceptsPointerInputAtPoint: point]) {
+        // Input-transparent here (e.g. an overlay subsurface with
+        // an empty input region): the pointer focus stays with
+        // whatever surface is underneath.
+        return;
+    }
     if (!_mouseIsInside) {
         [[self pointer] sendEnterSurface: self atPoint: point];
         _mouseIsInside = YES;

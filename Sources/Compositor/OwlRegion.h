@@ -19,11 +19,33 @@
 #import <Cocoa/Cocoa.h>
 #import <wayland-server.h>
 
+// One building operation of a wl_region. A region's effective
+// contents are the result of replaying its operations in order.
+struct OwlRegionOp {
+    BOOL isAdd;
+    NSRect rect;
+};
+
 @interface OwlRegion : NSObject {
     struct wl_resource *_resource;
-    // TODO
+    // A sequence of struct OwlRegionOp.
+    NSMutableData *_ops;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource;
+
+// An immutable snapshot of the operations, suitable for keeping in
+// a surface state after this region object is destroyed (clients
+// may destroy the wl_region right after e.g. set_input_region).
+// Never nil: an empty region gives an empty snapshot. "No region
+// set at all" is represented by nil at the call sites instead.
+- (NSData *) opsSnapshot;
+
++ (BOOL) ops: (NSData *) ops containPoint: (NSPoint) point;
+
+// Whether the region could contain any point at all. Conservative:
+// a region whose adds were later all subtracted again still
+// reports YES, but the per-point queries remain exact.
++ (BOOL) opsCanEverContainPoints: (NSData *) ops;
 
 @end
