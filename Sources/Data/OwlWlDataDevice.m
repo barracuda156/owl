@@ -128,7 +128,7 @@ static const struct wl_data_device_interface data_device_impl = {
     struct wl_resource *offer_resource = wl_resource_create(
          wl_resource_get_client(_resource),
          &wl_data_offer_interface,
-         2,
+         wl_resource_get_version(_resource),
          0
     );
     wl_data_device_send_data_offer(_resource, offer_resource);

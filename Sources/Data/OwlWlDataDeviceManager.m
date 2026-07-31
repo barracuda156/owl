@@ -36,7 +36,7 @@ static void data_device_manager_create_data_source_handler(
     struct wl_resource *data_source_resource = wl_resource_create(
         client,
         &wl_data_source_interface,
-        2,
+        wl_resource_get_version(resource),
         id
     );
     [[[OwlWlDataSource alloc] initWithResource: data_source_resource] release];
@@ -51,7 +51,7 @@ static void data_device_manager_get_data_device_handler(
     struct wl_resource *data_device_resource = wl_resource_create(
         client,
         &wl_data_device_interface,
-        2,
+        wl_resource_get_version(resource),
         id
     );
     [[[OwlWlDataDevice alloc] initWithResource: data_device_resource] release];
