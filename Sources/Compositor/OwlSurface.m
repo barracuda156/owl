@@ -475,6 +475,7 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) mouseEntered: (NSEvent *) event {
+    _exitedDuringDrag = NO;
     [[self window] setAcceptsMouseMovedEvents: YES];
     NSPoint point = [self pointOfEvent: event];
     if (!_mouseIsInside) {
@@ -513,14 +514,42 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) mouseDragged: (NSEvent *) event {
-    [self mouseMoved: event];
+    // Unlike -mouseMoved:, don't bail out when the point is
+    // outside our bounds: the client holds an implicit grab, and
+    // motion must keep flowing (with out-of-bounds coordinates if
+    // need be) so that e.g. a text selection can auto-scroll.
+    [self ensureMouseIsInside: event];
+    [[self pointer] sendMotionAtPoint: [self pointOfEvent: event]];
+    [[OwlServer sharedServer] flushClientsLater];
 }
 
 - (void) mouseExited: (NSEvent *) event {
+    if (_buttonsDown > 0) {
+        // Keep the implicit grab: deliver the leave once the
+        // buttons are released instead.
+        _exitedDuringDrag = YES;
+        return;
+    }
     _mouseIsInside = NO;
     [[self window] setAcceptsMouseMovedEvents: NO];
     [[self pointer] sendLeaveSurface: self];
     [[OwlServer sharedServer] flushClientsLater];
+}
+
+// Called after a button release; if the tracking rectangle fired
+// -mouseExited: while we were keeping the implicit grab alive,
+// deliver the deferred leave now that the grab is over.
+- (void) buttonReleasedForEvent: (NSEvent *) event {
+    if (_buttonsDown > 0) {
+        _buttonsDown--;
+    }
+    if (_buttonsDown != 0 || !_exitedDuringDrag) {
+        return;
+    }
+    _exitedDuringDrag = NO;
+    if (!NSPointInRect([self pointOfEvent: event], [self bounds])) {
+        [self mouseExited: event];
+    }
 }
 
 - (void) mouseDown: (NSEvent *) event {
@@ -529,6 +558,7 @@ static const struct wl_surface_interface surface_interface = {
     // interprets the click.
     [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
     [self ensureMouseIsInside: event];
+    _buttonsDown++;
     [[self pointer] sendButton: BTN_LEFT isPressed: YES];
     [[OwlServer sharedServer] flushClientsLater];
 }
@@ -536,12 +566,14 @@ static const struct wl_surface_interface surface_interface = {
 - (void) mouseUp: (NSEvent *) event {
     [self ensureMouseIsInside: event];
     [[self pointer] sendButton: BTN_LEFT isPressed: NO];
+    [self buttonReleasedForEvent: event];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
 - (void) rightMouseDown: (NSEvent *) event {
     [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
     [self ensureMouseIsInside: event];
+    _buttonsDown++;
     [[self pointer] sendButton: BTN_RIGHT isPressed: YES];
     [[OwlServer sharedServer] flushClientsLater];
 }
@@ -549,11 +581,12 @@ static const struct wl_surface_interface surface_interface = {
 - (void) rightMouseUp: (NSEvent *) event {
     [self ensureMouseIsInside: event];
     [[self pointer] sendButton: BTN_RIGHT isPressed: NO];
+    [self buttonReleasedForEvent: event];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
 - (void) rightMouseDragged: (NSEvent *) event {
-    [self mouseMoved: event];
+    [self mouseDragged: event];
 }
 
 - (void) scrollWheel: (NSEvent *) event {

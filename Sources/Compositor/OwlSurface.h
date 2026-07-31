@@ -41,6 +41,13 @@
     // -mouseEntered: before -mouseMoved:, so keep our
     // own track of whether we think the mouse is inside.
     BOOL _mouseIsInside;
+    // How many mouse buttons are currently held down. While
+    // nonzero the client has an implicit grab: the tracking
+    // rectangle may fire -mouseExited: mid-drag, but sending
+    // leave would break e.g. text selection, so we defer it
+    // until the last button is released.
+    NSUInteger _buttonsDown;
+    BOOL _exitedDuringDrag;
 
     // Callbacks to be sent when we draw a frame.
     // These are first collected as a part of a pending
