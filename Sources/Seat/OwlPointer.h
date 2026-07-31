@@ -21,9 +21,9 @@
 
 @class OwlSurface;
 
-// These come from linux/event.h
+// These come from linux/input-event-codes.h
 
-#define BTN_LEFT   0x100
+#define BTN_LEFT   0x110
 #define BTN_RIGHT  0x111
 #define BTN_MIDDLE 0x112
 
