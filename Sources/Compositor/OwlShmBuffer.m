@@ -62,6 +62,12 @@ static void dataReleaseCallback(void *info, const void *data, size_t size) {
 }
 
 - (void) invalidate {
+    if (_buffer == NULL) {
+        // The resource is gone; our snapshotted image (if any) is
+        // all the content this buffer will ever have.
+        return;
+    }
+
     [self releaseImage];
 
     enum wl_shm_format format = wl_shm_buffer_get_format(_buffer);
@@ -150,6 +156,14 @@ static void dataReleaseCallback(void *info, const void *data, size_t size) {
 #endif /* OWL_PLATFORM_APPLE */
 }
 
+static void shm_buffer_resource_destroyed(
+    struct wl_listener *listener,
+    void *data
+) {
+    struct wl_resource *resource = data;
+    [OwlBuffer notifyResourceDestroyed: resource];
+}
+
 - (id) initWithResource: (struct wl_resource *) resource {
     self = [super initWithExternallyImplementedResource: resource];
 
@@ -161,7 +175,20 @@ static void dataReleaseCallback(void *info, const void *data, size_t size) {
         return nil;
     }
 
+    _width = wl_shm_buffer_get_width(_buffer);
+    _height = wl_shm_buffer_get_height(_buffer);
+
+    _resourceDestroyListener.notify = shm_buffer_resource_destroyed;
+    wl_resource_add_destroy_listener(resource, &_resourceDestroyListener);
+
     return self;
+}
+
+- (void) resourceWasDestroyed {
+    wl_list_remove(&_resourceDestroyListener.link);
+    _buffer = NULL;
+    // May deallocate us; nothing after this.
+    [super resourceWasDestroyed];
 }
 
 - (void) dealloc {
@@ -170,9 +197,7 @@ static void dataReleaseCallback(void *info, const void *data, size_t size) {
 }
 
 - (NSSize) size {
-    size_t width = wl_shm_buffer_get_width(_buffer);
-    size_t height = wl_shm_buffer_get_height(_buffer);
-    return NSMakeSize(width, height);
+    return NSMakeSize(_width, _height);
 }
 
 - (void) drawInRect: (NSRect) rect {

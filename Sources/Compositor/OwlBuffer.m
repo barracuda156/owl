@@ -32,6 +32,7 @@ static NSMutableArray *buffers;
 
 static void buffer_destroy(struct wl_resource *resource) {
     OwlBuffer *self = wl_resource_get_user_data(resource);
+    [self resourceWasDestroyed];
     [self release];
 }
 
@@ -82,6 +83,23 @@ static const struct wl_buffer_interface buffer_impl = {
     return [[[OwlShmBuffer alloc] initWithResource: resource] autorelease];
 }
 
+- (void) resourceWasDestroyed {
+    _resource = NULL;
+    // May drop the last reference and deallocate us right away.
+    [buffers removeObjectIdenticalTo: self];
+}
+
++ (void) notifyResourceDestroyed: (struct wl_resource *) resource {
+    NSUInteger i, count = [buffers count];
+    for (i = 0; i < count; i++) {
+        OwlBuffer *buffer = [buffers objectAtIndex: i];
+        if (buffer->_resource == resource) {
+            [buffer resourceWasDestroyed];
+            return;
+        }
+    }
+}
+
 - (void) invalidate {
     // Do nothing, subclasses may override this to recompute their data.
 }
@@ -107,6 +125,10 @@ static const struct wl_buffer_interface buffer_impl = {
 }
 
 - (void) sendRelease {
+    if (_resource == NULL) {
+        // The client already destroyed the buffer.
+        return;
+    }
     wl_buffer_send_release(_resource);
 }
 

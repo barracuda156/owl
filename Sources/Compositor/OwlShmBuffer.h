@@ -24,6 +24,14 @@
 
 @interface OwlShmBuffer : OwlBuffer {
     struct wl_shm_buffer *_buffer;
+    // wl_shm buffer resources are implemented by wayland-server, so
+    // we cannot learn of their destruction via a resource destructor
+    // the way OwlBuffer does; listen for it instead.
+    struct wl_listener _resourceDestroyListener;
+    // Cached at creation (immutable for a wl_shm buffer), usable
+    // after the resource is destroyed, when _buffer is gone.
+    size_t _width;
+    size_t _height;
 
 #ifdef OWL_PLATFORM_APPLE
     CGImageRef _image;

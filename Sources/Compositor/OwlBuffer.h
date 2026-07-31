@@ -29,6 +29,19 @@
 
 + (OwlBuffer *) bufferForResource: (struct wl_resource *) resource;
 
+/* The buffer resource is being destroyed. Unregisters the buffer
+ * from the resource lookup (a dead entry would otherwise match a
+ * new resource that malloc placed at the same address) and clears
+ * the resource pointer. The object itself may outlive this: surface
+ * states can still hold it, using only its snapshotted content.
+ * Subclasses override to also drop their resource-derived state,
+ * calling up to this implementation. */
+- (void) resourceWasDestroyed;
+
+/* Find the buffer registered for the given resource, if any, and
+ * send it -resourceWasDestroyed. */
++ (void) notifyResourceDestroyed: (struct wl_resource *) resource;
+
 // Must be called after creating a buffer before calling any of the methods
 // below, as well as each time the buffer contents are known to change.
 - (void) invalidate;
