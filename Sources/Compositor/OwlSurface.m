@@ -524,6 +524,10 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) mouseDown: (NSEvent *) event {
+    // The client matches its mouse bindings against the exact
+    // modifier state, so make sure ours isn't stale before it
+    // interprets the click.
+    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
     [self ensureMouseIsInside: event];
     [[self pointer] sendButton: BTN_LEFT isPressed: YES];
     [[OwlServer sharedServer] flushClientsLater];
@@ -536,6 +540,7 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) rightMouseDown: (NSEvent *) event {
+    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
     [self ensureMouseIsInside: event];
     [[self pointer] sendButton: BTN_RIGHT isPressed: YES];
     [[OwlServer sharedServer] flushClientsLater];
@@ -552,6 +557,7 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) scrollWheel: (NSEvent *) event {
+    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
     [self ensureMouseIsInside: event];
     [[self pointer] sendScrollByX: [event deltaX] byY: [event deltaY]];
     [[OwlServer sharedServer] flushClientsLater];
@@ -564,6 +570,16 @@ static const struct wl_surface_interface surface_interface = {
 - (void) keyDown: (NSEvent *) event {
     OwlKeyboard *keyboard = [self keyboard];
     if (keyboard == nil) {
+        return;
+    }
+    [keyboard reconcileModifierFlags: [event modifierFlags]];
+    if ([event modifierFlags] & NSCommandKeyMask) {
+        // Command chords belong to the compositor (they are our
+        // menu shortcuts), so don't type them into the client.
+        // Cocoa would not deliver the matching keyUp anyway,
+        // which would leave the key stuck down and autorepeating
+        // in the client.
+        [[OwlServer sharedServer] flushClientsLater];
         return;
     }
     // Don't forward Cocoa's autorepeat to version 4+ keyboards:
@@ -579,7 +595,12 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) keyUp: (NSEvent *) event {
-    [[self keyboard] sendKey: [event keyCode] isPressed: NO];
+    OwlKeyboard *keyboard = [self keyboard];
+    if (keyboard == nil) {
+        return;
+    }
+    [keyboard reconcileModifierFlags: [event modifierFlags]];
+    [keyboard sendKey: [event keyCode] isPressed: NO];
     [[OwlServer sharedServer] flushClientsLater];
 }
 

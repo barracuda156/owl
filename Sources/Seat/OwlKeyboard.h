@@ -40,4 +40,11 @@
  * plus a wl_keyboard.modifiers event. */
 - (void) handleFlagsChanged: (NSEvent *) event;
 
+/* Bring our idea of the modifier state in sync with the given
+ * -[NSEvent modifierFlags] value. Cocoa delivers NSFlagsChanged
+ * to the first responder of the key window, so we miss changes
+ * that happen while the menu bar or another application has
+ * focus; calling this from every event self-heals the state. */
+- (void) reconcileModifierFlags: (NSUInteger) flags;
+
 @end

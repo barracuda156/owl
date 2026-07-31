@@ -37,7 +37,6 @@
 #define OWL_MOD_LOCK    2
 #define OWL_MOD_CONTROL 4
 #define OWL_MOD_MOD1    8   /* Option/Alt */
-#define OWL_MOD_MOD4    64  /* Command/Super */
 
 /* Evdev keycodes for (left) modifier keys. */
 #define OWL_KEY_LEFTCTRL   29
@@ -63,9 +62,17 @@ static uint32_t current_mods_depressed;
 static uint32_t current_mods_locked;
 static NSUInteger previous_cocoa_flags;
 
+/* The evdev keycodes of the non-modifier keys whose press we have
+ * forwarded to a client and whose release we haven't. Global for
+ * the same reason the modifier state is: one physical keyboard. */
+static NSMutableIndexSet *pressed_keys;
+
 + (void) initialize {
     if (keyboards == nil) {
         keyboards = [[NSMutableArray alloc] initWithCapacity: 1];
+    }
+    if (pressed_keys == nil) {
+        pressed_keys = [[NSMutableIndexSet alloc] init];
     }
 }
 
@@ -332,6 +339,18 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
         return;
     }
 
+    if (isPressed) {
+        [pressed_keys addIndex: xkbKeyCode];
+    } else {
+        if (![pressed_keys containsIndex: xkbKeyCode]) {
+            // We never forwarded the press (a Command chord, or
+            // it was force-released when Command engaged), so
+            // don't send a spurious release.
+            return;
+        }
+        [pressed_keys removeIndex: xkbKeyCode];
+    }
+
     wl_keyboard_send_key(
         _resource,
         [[OwlServer sharedServer] nextSerial],
@@ -355,6 +374,15 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
     );
 }
 
+- (void) releaseAllKeys {
+    NSUInteger code = [pressed_keys firstIndex];
+    while (code != NSNotFound) {
+        [self sendKeyRaw: (uint32_t) code isPressed: NO];
+        code = [pressed_keys indexGreaterThanIndex: code];
+    }
+    [pressed_keys removeAllIndexes];
+}
+
 - (void) sendModifiers: (uint32_t) modifiers {
     uint32_t serial = [[OwlServer sharedServer] nextSerial];
     wl_keyboard_send_modifiers(_resource, serial, modifiers, 0, 0, 0);
@@ -372,7 +400,10 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
     );
 }
 
-- (void) handleFlagsChanged: (NSEvent *) event {
+- (void) reconcileModifierFlags: (NSUInteger) flags {
+    // Command is deliberately absent from this table: it is the
+    // compositor's modifier (menu shortcuts like Cmd+C/Cmd+V), so
+    // clients never see it as Mod4 or as a Meta key press.
     static const struct {
         NSUInteger cocoaMask;
         uint32_t modMask;
@@ -380,14 +411,17 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
     } modifiers[] = {
         {NSShiftKeyMask, OWL_MOD_SHIFT, OWL_KEY_LEFTSHIFT},
         {NSControlKeyMask, OWL_MOD_CONTROL, OWL_KEY_LEFTCTRL},
-        {NSAlternateKeyMask, OWL_MOD_MOD1, OWL_KEY_LEFTALT},
-        {NSCommandKeyMask, OWL_MOD_MOD4, OWL_KEY_LEFTMETA}
+        {NSAlternateKeyMask, OWL_MOD_MOD1, OWL_KEY_LEFTALT}
     };
     size_t modifiers_size = sizeof(modifiers) / sizeof(modifiers[0]);
 
-    NSUInteger flags = [event modifierFlags];
     NSUInteger changed = flags ^ previous_cocoa_flags;
+    BOOL modsChanged = NO;
     size_t i;
+
+    if (changed == 0) {
+        return;
+    }
 
     for (i = 0; i < modifiers_size; i++) {
         if (!(changed & modifiers[i].cocoaMask)) {
@@ -400,6 +434,7 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
             current_mods_depressed &= ~modifiers[i].modMask;
         }
         [self sendKeyRaw: modifiers[i].evdevCode isPressed: isPressed];
+        modsChanged = YES;
     }
 
     if (changed & NSAlphaShiftKeyMask) {
@@ -409,11 +444,26 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
         current_mods_locked ^= OWL_MOD_LOCK;
         [self sendKeyRaw: OWL_KEY_CAPSLOCK isPressed: YES];
         [self sendKeyRaw: OWL_KEY_CAPSLOCK isPressed: NO];
+        modsChanged = YES;
+    }
+
+    if ((changed & NSCommandKeyMask) && (flags & NSCommandKeyMask)) {
+        // Command is engaging. Cocoa will not deliver keyUp for
+        // keys released while Command is held, so release
+        // everything now rather than leave keys stuck down
+        // (and autorepeating) in the client.
+        [self releaseAllKeys];
     }
 
     previous_cocoa_flags = flags;
 
-    [self sendCurrentModifiers];
+    if (modsChanged) {
+        [self sendCurrentModifiers];
+    }
+}
+
+- (void) handleFlagsChanged: (NSEvent *) event {
+    [self reconcileModifierFlags: [event modifierFlags]];
 }
 
 - (void) sendEnterSurface: (OwlSurface *) surface {
