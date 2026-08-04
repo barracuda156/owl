@@ -53,14 +53,34 @@ static void iosurface_create_buffer_handler(
     uint32_t id
 ) {
     OwlZowlIOSurfaceV1 *self = wl_resource_get_user_data(resource);
-    struct wl_resource *buffer_resource = wl_resource_create(
+    struct wl_resource *buffer_resource;
+    OwlIOSurfaceBuffer *buffer;
+
+    // The protocol defines no error codes, so these use code 0.
+    if (!MACH_PORT_VALID(self->_surfacePort)) {
+        wl_resource_post_error(
+            resource,
+            0,
+            "create_buffer sent before set_surface_port"
+        );
+        return;
+    }
+    buffer_resource = wl_resource_create(
         client,
         &wl_buffer_interface,
         1,
         id
     );
-    [[[OwlIOSurfaceBuffer alloc] initWithResource: buffer_resource
-                                      surfacePort: self->_surfacePort] release];
+    buffer = [[OwlIOSurfaceBuffer alloc] initWithResource: buffer_resource
+                                              surfacePort: self->_surfacePort];
+    if ([buffer iosurface] == NULL) {
+        wl_resource_post_error(
+            resource,
+            0,
+            "the surface port does not name a valid IOSurface"
+        );
+    }
+    [buffer release];
 }
 
 static const struct zowl_iosurface_v1_interface iosurface_impl = {
@@ -121,6 +141,10 @@ kern_return_t owl_iosurface_v1_server_set_surface_port(
     if (surface == nil) {
         NSLog(@"Failed to find the surface the receiver port belongs to");
         return KERN_INVALID_ARGUMENT;
+    }
+    if (MACH_PORT_VALID(surface->_surfacePort)) {
+        // Repeated set_surface_port: do not leak the previous right.
+        mach_port_deallocate(mach_task_self(), surface->_surfacePort);
     }
     surface->_surfacePort = iosurface_port;
     return KERN_SUCCESS;
