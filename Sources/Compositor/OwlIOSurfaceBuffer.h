@@ -28,10 +28,15 @@
 @interface OwlIOSurfaceBuffer : OwlBuffer {
     IOSurfaceRef _surface;
     GLuint _tex;
+    CGLContextObj _texContext;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource
             surfacePort: (mach_port_t) surfacePort;
+
+/* nil when the IOSurface lookup failed; the creator should treat
+ * that as a protocol error. */
+- (IOSurfaceRef) iosurface;
 
 @end
 
