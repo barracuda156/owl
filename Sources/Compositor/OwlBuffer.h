@@ -49,7 +49,16 @@
 - (NSSize) size;
 
 - (BOOL) needsGLForRendering;
+
+/* Draw the whole buffer scaled into the given rect. */
 - (void) drawInRect: (NSRect) rect;
+
+/* Draw the given sub-rectangle of the buffer (in buffer
+ * coordinates, top-left origin) scaled into the given rect.
+ * This is what wp_viewport crop and scale maps to; subclasses
+ * override this method, and -drawInRect: forwards to it with
+ * the full buffer as the source. */
+- (void) drawInRect: (NSRect) rect fromRect: (NSRect) source;
 
 /* Returns an NSImage for cursor creation (may return nil) */
 - (NSImage *) createNSImage;

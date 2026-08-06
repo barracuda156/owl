@@ -22,6 +22,7 @@
 @class OwlBuffer;
 @class OwlSurfaceState;
 @class OwlWpPresentationFeedback;
+@class OwlWpViewport;
 
 @protocol OwlSurfaceRole
 
@@ -74,6 +75,11 @@
     // on the next commit.
     OwlSurfaceState *_pendingState;
     id<OwlSurfaceRole> _role;
+
+    // The wp_viewport attached to this surface, if any. Not
+    // retained: the viewport resource owns the object, and clears
+    // this pointer when it is destroyed.
+    OwlWpViewport *_viewport;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource;
@@ -104,5 +110,18 @@
 /* Complete and clear the queued presentation feedbacks. */
 - (void) firePresentationFeedbacksPresented;
 - (void) discardPresentationFeedbacks;
+
+/* wp_viewport support. The viewport object registers itself here
+ * (each surface can have at most one), writes the crop and scale
+ * values into the pending state through the setters below, and
+ * lets us know when it is destroyed. */
+- (BOOL) hasViewport;
+- (void) setViewport: (OwlWpViewport *) viewport;
+- (void) viewportWasDestroyed;
+
+- (void) setPendingViewportSource: (NSRect) source;
+- (void) unsetPendingViewportSource;
+- (void) setPendingViewportDestination: (NSSize) destination;
+- (void) unsetPendingViewportDestination;
 
 @end

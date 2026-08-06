@@ -114,8 +114,14 @@ static const struct wl_buffer_interface buffer_impl = {
     return NO;
 }
 
-- (void) drawInRect: (NSRect) rect {
+- (void) drawInRect: (NSRect) rect fromRect: (NSRect) source {
     // Do nothing, subclasses override this.
+}
+
+- (void) drawInRect: (NSRect) rect {
+    NSSize size = [self size];
+    [self drawInRect: rect
+            fromRect: NSMakeRect(0, 0, size.width, size.height)];
 }
 
 - (NSImage *) createNSImage {

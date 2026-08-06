@@ -200,14 +200,37 @@ static void shm_buffer_resource_destroyed(
     return NSMakeSize(_width, _height);
 }
 
-- (void) drawInRect: (NSRect) rect {
+- (void) drawInRect: (NSRect) rect fromRect: (NSRect) source {
 #ifdef OWL_PLATFORM_APPLE
     CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
     CGContextSetBlendMode(context, kCGBlendModeCopy);
-    CGContextDrawImage(context, NSRectToCGRect(rect), _image);
+    if (source.origin.x == 0 && source.origin.y == 0
+        && source.size.width == _width
+        && source.size.height == _height)
+    {
+        CGContextDrawImage(context, NSRectToCGRect(rect), _image);
+        return;
+    }
+    // CGImageCreateWithImageInRect crops in image coordinates with
+    // the origin at the top-left corner, matching Wayland buffer
+    // coordinates. The crop only references the original pixels
+    // (no copy), so doing it on every draw is cheap.
+    CGImageRef cropped = CGImageCreateWithImageInRect(
+        _image,
+        NSRectToCGRect(source)
+    );
+    if (cropped == NULL) {
+        return;
+    }
+    CGContextDrawImage(context, NSRectToCGRect(rect), cropped);
+    CGImageRelease(cropped);
 #else
+    // The image rep's coordinate system has its origin at the
+    // bottom-left corner; flip the top-left-origin source rect.
+    NSRect from = source;
+    from.origin.y = _height - source.origin.y - source.size.height;
     [_rep drawInRect: rect
-            fromRect: rect
+            fromRect: from
            operation: NSCompositeSourceOver
             fraction: 1.0
       respectFlipped: NO

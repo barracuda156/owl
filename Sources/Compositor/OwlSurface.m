@@ -19,6 +19,7 @@
 #import "OwlSurface.h"
 #import "OwlCallback.h"
 #import "OwlWpPresentation.h"
+#import "OwlWpViewporter.h"
 #import "OwlPointer.h"
 #import "OwlKeyboard.h"
 #import "OwlServer.h"
@@ -27,8 +28,10 @@
 #import "OwlRegion.h"
 #import "OwlWlDataDevice.h"
 #import "OwlDragDataSource.h"
+#import "viewporter.h"
 #import <wayland-server.h>
 #import <Cocoa/Cocoa.h>
+#import <math.h>
 
 
 @implementation OwlSurface
@@ -98,7 +101,9 @@ static void surface_damage_buffer_handler(
     int32_t height
 ) {
     // We don't support buffer scales or transforms, so buffer
-    // coordinates are the same as surface coordinates.
+    // coordinates are the same as surface coordinates. (With a
+    // wp_viewport attached they do differ, but then any damage
+    // triggers a full repaint, so conflating the two is harmless.)
     surface_damage_handler(client, resource, x, y, width, height);
 }
 
@@ -209,11 +214,97 @@ static void surface_damage_buffer_handler(
                                 assumeInside: NO];
 }
 
+- (BOOL) hasViewport {
+    return _viewport != nil;
+}
+
+- (void) setViewport: (OwlWpViewport *) viewport {
+    _viewport = viewport;
+}
+
+- (void) viewportWasDestroyed {
+    _viewport = nil;
+    // Destroying the viewport removes the crop and scale state;
+    // like any other surface state change, this takes effect on
+    // the next commit.
+    [_pendingState unsetViewportSource];
+    [_pendingState unsetViewportDestination];
+}
+
+- (void) setPendingViewportSource: (NSRect) source {
+    [_pendingState setViewportSource: source];
+}
+
+- (void) unsetPendingViewportSource {
+    [_pendingState unsetViewportSource];
+}
+
+- (void) setPendingViewportDestination: (NSSize) destination {
+    [_pendingState setViewportDestination: destination];
+}
+
+- (void) unsetPendingViewportDestination {
+    [_pendingState unsetViewportDestination];
+}
+
+// Enforce the wp_viewport rules that are only checked at commit
+// time, against the buffer that is about to be applied. Returns NO
+// after posting a protocol error, in which case the pending state
+// must not be applied.
+- (BOOL) validatePendingViewportWithBuffer: (OwlBuffer *) buffer {
+    if (_viewport == nil || ![_pendingState viewportSourceIsSet]) {
+        return YES;
+    }
+    NSRect source = [_pendingState viewportSource];
+    if (![_pendingState viewportDestinationIsSet]
+        && (source.size.width != floor(source.size.width)
+            || source.size.height != floor(source.size.height)))
+    {
+        wl_resource_post_error(
+            [_viewport resource],
+            WP_VIEWPORT_ERROR_BAD_SIZE,
+            "non-integer source size %gx%g with no destination set",
+            (double) source.size.width,
+            (double) source.size.height
+        );
+        return NO;
+    }
+    // The source rectangle's origin and size are known to be
+    // non-negative and positive respectively (set_source checks),
+    // so only the far edges can stick out of the buffer.
+    if (buffer != nil) {
+        NSSize bufferSize = [buffer size];
+        if (source.origin.x + source.size.width > bufferSize.width
+            || source.origin.y + source.size.height > bufferSize.height)
+        {
+            wl_resource_post_error(
+                [_viewport resource],
+                WP_VIEWPORT_ERROR_OUT_OF_BUFFER,
+                "source rectangle (%g, %g) %gx%g is outside of the %gx%g buffer",
+                (double) source.origin.x,
+                (double) source.origin.y,
+                (double) source.size.width,
+                (double) source.size.height,
+                (double) bufferSize.width,
+                (double) bufferSize.height
+            );
+            return NO;
+        }
+    }
+    return YES;
+}
+
 - (void) commit {
     OwlBuffer *oldBuffer = [_currentState buffer];
     OwlBuffer *newBuffer = [_pendingState buffer];
     BOOL oldBufferNeedsGL = [oldBuffer needsGLForRendering];
     BOOL newBufferNeedsGL = [newBuffer needsGLForRendering];
+
+    if (![self validatePendingViewportWithBuffer: newBuffer]) {
+        // A protocol error has been posted and the client is on
+        // its way out; don't apply the broken state.
+        return;
+    }
 
     // We're going to "map" the surface if it wasn't
     // mapped previously and the new buffer is not nil.
@@ -240,6 +331,11 @@ static void surface_damage_buffer_handler(
     // Compared by pointer below, never dereferenced: the old data
     // may die with the old state.
     NSData *oldInputRegion = [_currentState inputRegion];
+
+    // Whether this commit crops and scales differently from the
+    // previous one; computed before the swap while both states
+    // are still around.
+    BOOL viewportChanged = ![_pendingState hasSameViewportAs: _currentState];
 
     // Actually set the pending state as our new state.
     [_currentState release];
@@ -279,8 +375,22 @@ static void surface_damage_buffer_handler(
 
     BOOL willRedraw = NO;
 
-    if (!NSEqualSizes([self frame].size, [newBuffer size])) {
-        [self setFrameSize: [newBuffer size]];
+    // With a wp_viewport attached, the surface size decouples from
+    // the buffer size: the destination size wins if set, then the
+    // source rectangle size, and only then the buffer size.
+    NSSize surfaceSize;
+    BOOL viewportActive = [_currentState viewportSourceIsSet]
+        || [_currentState viewportDestinationIsSet];
+    if ([_currentState viewportDestinationIsSet]) {
+        surfaceSize = [_currentState viewportDestination];
+    } else if ([_currentState viewportSourceIsSet]) {
+        surfaceSize = [_currentState viewportSource].size;
+    } else {
+        surfaceSize = [newBuffer size];
+    }
+
+    if (!NSEqualSizes([self frame].size, surfaceSize)) {
+        [self setFrameSize: surfaceSize];
         [self updateTrackingRect];
         [self setNeedsDisplay: YES];
         willRedraw = YES;
@@ -294,9 +404,18 @@ static void surface_damage_buffer_handler(
     }
 
     // Now, tell Cocoa to redraw this view.
-    if (damageAll) {
+    if (damageAll || viewportChanged) {
         [self setNeedsDisplay: YES];
         willRedraw = YES;
+    } else if (viewportActive) {
+        // Damage is in surface coordinates, but the view shows a
+        // scaled crop of the buffer; mapping the rects through the
+        // viewport is not worth the trouble, so any damage at all
+        // repaints everything.
+        if ([[_currentState damage] count] > 0) {
+            [self setNeedsDisplay: YES];
+            willRedraw = YES;
+        }
     } else {
         for (NSValue *value in [_currentState damage]) {
             NSRect rect = [value rectValue];
@@ -374,7 +493,12 @@ static void surface_commit_handler(
     [_openGLContext setView: self];
     [_openGLContext makeCurrentContext];
 
-    [[_currentState buffer] drawInRect: [self bounds]];
+    if ([_currentState viewportSourceIsSet]) {
+        [[_currentState buffer] drawInRect: [self bounds]
+                                  fromRect: [_currentState viewportSource]];
+    } else {
+        [[_currentState buffer] drawInRect: [self bounds]];
+    }
 
     // We have painted; so send out all callbacks
     // and presentation feedbacks.

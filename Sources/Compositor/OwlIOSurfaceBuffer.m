@@ -129,7 +129,7 @@
     );
 }
 
-- (void) drawInRect: (NSRect) rect {
+- (void) drawInRect: (NSRect) rect fromRect: (NSRect) source {
     if (_surface == NULL) {
         return;
     }
@@ -148,6 +148,25 @@
         {rect.size.width, 0},
         {0, rect.size.height},
         {rect.size.width, rect.size.height}
+    };
+
+    // Rectangle textures are sampled in pixel coordinates, so the
+    // wp_viewport source rect can be used as is, except that its
+    // top-left-origin y axis points the opposite way from the
+    // texture's t axis (texel row 0 lands at the bottom of the
+    // view), so flip.
+    GLfloat texture_height = IOSurfaceGetHeight(_surface);
+    struct {
+        GLfloat s, t;
+    } texcoord[4] = {
+        {source.origin.x,
+         texture_height - source.origin.y - source.size.height},
+        {source.origin.x + source.size.width,
+         texture_height - source.origin.y - source.size.height},
+        {source.origin.x,
+         texture_height - source.origin.y},
+        {source.origin.x + source.size.width,
+         texture_height - source.origin.y}
     };
 
     glEnable(GL_TEXTURE_RECTANGLE_ARB);
@@ -172,7 +191,7 @@
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
     glPushMatrix();
-    glTexCoordPointer(2, GL_FLOAT, 0, coord);
+    glTexCoordPointer(2, GL_FLOAT, 0, texcoord);
     glVertexPointer(2, GL_FLOAT, 0, coord);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);

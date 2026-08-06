@@ -58,7 +58,9 @@
                                       alpha: _alpha];
 }
 
-- (void) drawInRect: (NSRect) rect {
+- (void) drawInRect: (NSRect) rect fromRect: (NSRect) source {
+    // A single-pixel buffer looks the same whatever sub-rectangle
+    // of it gets sampled.
     [[self color] set];
     NSRectFillUsingOperation(rect, NSCompositeSourceOver);
 }

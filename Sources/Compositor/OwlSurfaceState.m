@@ -39,6 +39,10 @@
     _buffer = [previousState->_buffer retain];
     _geometry = previousState->_geometry;
     _inputRegion = [previousState->_inputRegion retain];
+    _viewportSourceIsSet = previousState->_viewportSourceIsSet;
+    _viewportSource = previousState->_viewportSource;
+    _viewportDestinationIsSet = previousState->_viewportDestinationIsSet;
+    _viewportDestination = previousState->_viewportDestination;
     return self;
 }
 
@@ -102,6 +106,61 @@
     [inputRegion retain];
     [_inputRegion release];
     _inputRegion = inputRegion;
+}
+
+- (BOOL) viewportSourceIsSet {
+    return _viewportSourceIsSet;
+}
+
+- (NSRect) viewportSource {
+    return _viewportSource;
+}
+
+- (void) setViewportSource: (NSRect) source {
+    _viewportSourceIsSet = YES;
+    _viewportSource = source;
+}
+
+- (void) unsetViewportSource {
+    _viewportSourceIsSet = NO;
+    _viewportSource = NSZeroRect;
+}
+
+- (BOOL) viewportDestinationIsSet {
+    return _viewportDestinationIsSet;
+}
+
+- (NSSize) viewportDestination {
+    return _viewportDestination;
+}
+
+- (void) setViewportDestination: (NSSize) destination {
+    _viewportDestinationIsSet = YES;
+    _viewportDestination = destination;
+}
+
+- (void) unsetViewportDestination {
+    _viewportDestinationIsSet = NO;
+    _viewportDestination = NSZeroSize;
+}
+
+- (BOOL) hasSameViewportAs: (OwlSurfaceState *) other {
+    if (_viewportSourceIsSet != other->_viewportSourceIsSet) {
+        return NO;
+    }
+    if (_viewportSourceIsSet
+        && !NSEqualRects(_viewportSource, other->_viewportSource)) {
+        return NO;
+    }
+    if (_viewportDestinationIsSet != other->_viewportDestinationIsSet) {
+        return NO;
+    }
+    if (_viewportDestinationIsSet
+        && !NSEqualSizes(_viewportDestination,
+                         other->_viewportDestination)) {
+        return NO;
+    }
+    return YES;
 }
 
 @end

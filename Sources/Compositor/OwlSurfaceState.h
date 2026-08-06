@@ -32,6 +32,14 @@
     // The input region as an OwlRegion op list snapshot, or nil
     // when the whole surface accepts input (the default).
     NSData *_inputRegion;
+    // wp_viewport crop and scale state: the source rectangle to
+    // sample, in buffer coordinates (top-left origin), and the
+    // destination size the surface gets, in surface coordinates.
+    // Either one may be unset independently.
+    BOOL _viewportSourceIsSet;
+    NSRect _viewportSource;
+    BOOL _viewportDestinationIsSet;
+    NSSize _viewportDestination;
 }
 
 - (id) init;
@@ -54,5 +62,20 @@
 
 - (NSData *) inputRegion;
 - (void) setInputRegion: (NSData *) inputRegion;
+
+- (BOOL) viewportSourceIsSet;
+- (NSRect) viewportSource;
+- (void) setViewportSource: (NSRect) source;
+- (void) unsetViewportSource;
+
+- (BOOL) viewportDestinationIsSet;
+- (NSSize) viewportDestination;
+- (void) setViewportDestination: (NSSize) destination;
+- (void) unsetViewportDestination;
+
+/* Whether the two states crop and scale identically; when they do
+ * not, the same buffer maps onto the view differently, so damage
+ * tracking is moot and the view needs a full repaint. */
+- (BOOL) hasSameViewportAs: (OwlSurfaceState *) other;
 
 @end
