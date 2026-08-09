@@ -22,6 +22,7 @@
 #import "OwlServer.h"
 #import "OwlKeyboard.h"
 #import "OwlWlDataDevice.h"
+#import "OwlZwpPrimarySelectionDeviceV1.h"
 #import "xdg-shell.h"
 #import <wayland-server.h>
 
@@ -297,6 +298,11 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     return [OwlWlDataDevice dataDeviceForClient: client];
 }
 
+- (OwlZwpPrimarySelectionDeviceV1 *) primaryDataDevice {
+    struct wl_client *client = wl_resource_get_client(_resource);
+    return [OwlZwpPrimarySelectionDeviceV1 deviceForClient: client];
+}
+
 - (uint32_t) serial {
     struct wl_client *client = wl_resource_get_client(_resource);
     struct wl_display *display = wl_client_get_display(client);
@@ -370,6 +376,7 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     if (_destroying) return;
     [[self keyboard] sendEnterSurface: _surface];
     [[self dataDevice] focused];
+    [[self primaryDataDevice] focused];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
@@ -377,6 +384,7 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     if (_destroying) return;
     [[self keyboard] sendLeaveSurface: _surface];
     [[self dataDevice] unfocused];
+    [[self primaryDataDevice] unfocused];
     [[OwlServer sharedServer] flushClientsLater];
 }
 

@@ -25,17 +25,19 @@
 // A selection represents a "place" or a "slot" where data can be copied to
 // and pasted from. One selection can only hold one data source at a time.
 //
-// There's a single global selection that represents the system clipboard.
-// On GNUstep, there's additionally the primary selection.
+// There's a single global selection that represents the system clipboard,
+// plus the primary selection (zwp_primary_selection_device_manager_v1).
+// On GNUstep, the primary selection is additionally bridged to the host
+// pasteboard; on Apple, it is compositor-internal only (there is no
+// primary clipboard on macOS), so it only mediates client-to-client
+// middle-click paste.
 @interface OwlSelection : NSObject <OwlDataSourceHolder> {
     OwlDataSource *_dataSource;
     NSMutableArray *_dataDevices;
 }
 
 + (OwlSelection *) clipboard;
-#ifdef OWL_PLATFORM_GNUSTEP
 + (OwlSelection *) primary;
-#endif
 
 // Get and set the contents of the selction, as a data source.
 - (OwlDataSource *) dataSource;

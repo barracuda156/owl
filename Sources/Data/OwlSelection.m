@@ -44,7 +44,6 @@
     return clipboard;
 }
 
-#ifdef OWL_PLATFORM_GNUSTEP
 + (OwlSelection *) primary {
     static OwlSelection *primary;
     if (primary == nil) {
@@ -52,7 +51,6 @@
     }
     return primary;
 }
-#endif
 
 // Get the current data source.
 - (OwlDataSource *) dataSource {

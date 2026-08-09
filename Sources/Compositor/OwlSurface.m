@@ -792,6 +792,38 @@ static const struct wl_surface_interface surface_interface = {
     [self mouseDragged: event];
 }
 
+- (void) otherMouseDown: (NSEvent *) event {
+    // Cocoa reports every button beyond left/right through this
+    // path; we only map the middle button (primary-selection paste
+    // in foot et al.) and ignore any further extra buttons, which
+    // have no established evdev mapping to forward.
+    if ([event buttonNumber] != 2) {
+        return;
+    }
+    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
+    [self ensureMouseIsInside: event];
+    _buttonsDown++;
+    [[self pointer] sendButton: BTN_MIDDLE isPressed: YES];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (void) otherMouseUp: (NSEvent *) event {
+    if ([event buttonNumber] != 2) {
+        return;
+    }
+    [self ensureMouseIsInside: event];
+    [[self pointer] sendButton: BTN_MIDDLE isPressed: NO];
+    [self buttonReleasedForEvent: event];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (void) otherMouseDragged: (NSEvent *) event {
+    if ([event buttonNumber] != 2) {
+        return;
+    }
+    [self mouseDragged: event];
+}
+
 - (void) scrollWheel: (NSEvent *) event {
     [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
     [self ensureMouseIsInside: event];
