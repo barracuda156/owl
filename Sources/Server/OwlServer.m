@@ -31,6 +31,7 @@
 #import "OwlWpSinglePixelBufferManagerV1.h"
 #import "OwlWpPresentation.h"
 #import "OwlWpViewporter.h"
+#import "OwlZwpIdleInhibitManagerV1.h"
 #import "OwlSeat.h"
 #import "OwlWpCursorShapeManagerV1.h"
 #import "OwlOutput.h"
@@ -142,6 +143,7 @@
     [OwlWpSinglePixelBufferManagerV1 addGlobalToDisplay: _display];
     [OwlWpPresentation addGlobalToDisplay: _display];
     [OwlWpViewporter addGlobalToDisplay: _display];
+    [OwlZwpIdleInhibitManagerV1 addGlobalToDisplay: _display];
     [OwlWlDataDeviceManager addGlobalToDisplay: _display];
     [OwlZwpPrimarySelectionDeviceManagerV1 addGlobalToDisplay: _display];
     [OwlSeat addGlobalToDisplay: _display];

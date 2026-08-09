@@ -27,7 +27,11 @@ if [ "$(uname)" = Darwin ]; then
     # Use -weak_framework for IOSurface to support macOS 10.5 (Leopard)
     # where IOSurface is not available. The code uses compile-time guards
     # (OWL_HAS_IOSURFACE) to avoid calling IOSurface APIs on older systems.
-    LIBS=${LIBS:-"-l wayland-server -framework Cocoa -framework OpenGL -weak_framework IOSurface"}
+    # IOKit provides the idle-inhibit power assertions (OWL_HAS_IOPM,
+    # 10.6+); CoreServices provides the UpdateSystemActivity() fallback
+    # used pre-10.6. Both frameworks exist on every supported OS version,
+    # so they're linked normally rather than weakly.
+    LIBS=${LIBS:-"-l wayland-server -framework Cocoa -framework OpenGL -weak_framework IOSurface -framework IOKit -framework CoreServices"}
 else
     LIBS=${LIBS:-"-l wayland-server -l gnustep-gui -l gnustep-base -l objc"}
 fi

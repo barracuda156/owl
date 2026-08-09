@@ -31,14 +31,20 @@
     #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
         #define OWL_HAS_GCD 1
         #define OWL_HAS_IOSURFACE 1
+        /* IOPMAssertionCreateWithName (IOKit power management) is
+         * also a 10.6+ API; on 10.5 idle-inhibit falls back to
+         * periodic UpdateSystemActivity() calls. */
+        #define OWL_HAS_IOPM 1
     #else
         #undef OWL_HAS_GCD
         #undef OWL_HAS_IOSURFACE
+        #undef OWL_HAS_IOPM
     #endif
 #else
     #undef OWL_PLATFORM_APPLE
     #undef OWL_HAS_GCD
     #undef OWL_HAS_IOSURFACE
+    #undef OWL_HAS_IOPM
 #endif
 
 #ifdef GS_API_VERSION
