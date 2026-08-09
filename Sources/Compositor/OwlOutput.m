@@ -136,6 +136,10 @@ static void output_destroy(struct wl_resource *resource) {
     [super dealloc];
 }
 
+- (NSScreen *) screen {
+    return _screen;
+}
+
 static void output_bind(
     struct wl_client *client,
     void *data,

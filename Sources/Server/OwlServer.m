@@ -34,6 +34,7 @@
 #import "OwlSeat.h"
 #import "OwlWpCursorShapeManagerV1.h"
 #import "OwlOutput.h"
+#import "OwlZxdgOutputManagerV1.h"
 #import "OwlWlDataDeviceManager.h"
 #import "OwlZwpPrimarySelectionDeviceManagerV1.h"
 #import "OwlZwlrDataControlManagerV1.h"
@@ -146,6 +147,7 @@
     [OwlSeat addGlobalToDisplay: _display];
     [OwlWpCursorShapeManagerV1 addGlobalToDisplay: _display];
     [OwlOutput addGlobalToDisplay: _display];
+    [OwlZxdgOutputManagerV1 addGlobalToDisplay: _display];
 
     [OwlZwlrDataControlManagerV1 addGlobalToDisplay: _display];
 

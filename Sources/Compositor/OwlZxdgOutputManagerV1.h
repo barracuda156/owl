@@ -21,16 +21,10 @@
 #import <wayland-server.h>
 
 
-@interface OwlOutput : NSObject <OwlGlobal> {
+@interface OwlZxdgOutputManagerV1 : NSObject <OwlGlobal> {
     struct wl_resource *_resource;
-    NSScreen *_screen;
 }
 
-- (id) initWithResource: (struct wl_resource *) resource
-                 screen: (NSScreen *) screen;
-
-- (NSScreen *) screen;
-
-+ (void) addGlobalToDisplay: (struct wl_display *) display;
+- (id) initWithResource: (struct wl_resource *) resource;
 
 @end

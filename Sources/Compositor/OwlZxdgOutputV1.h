@@ -16,21 +16,26 @@
  * along with Owl.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#import "OwlGlobal.h"
 #import <Cocoa/Cocoa.h>
 #import <wayland-server.h>
 
+@class OwlOutput;
 
-@interface OwlOutput : NSObject <OwlGlobal> {
+/* zxdg_output_v1: a thin, static wrapper over OwlOutput's NSScreen
+ * frame. Owl never tracks screen reconfiguration at runtime (nothing
+ * else in the compositor does either), so the whole event burst is
+ * sent once at construction and no reference to the wl_output or its
+ * OwlOutput is kept around afterwards. */
+@interface OwlZxdgOutputV1 : NSObject {
     struct wl_resource *_resource;
-    NSScreen *_screen;
 }
 
+// outputResource is the wl_output this xdg_output was created for
+// (see zxdg_output_manager_v1.get_xdg_output); it is only used to
+// send wl_output.done once the initial xdg_output burst is out, per
+// the version-3 done semantics.
 - (id) initWithResource: (struct wl_resource *) resource
-                 screen: (NSScreen *) screen;
-
-- (NSScreen *) screen;
-
-+ (void) addGlobalToDisplay: (struct wl_display *) display;
+                  output: (OwlOutput *) output
+          outputResource: (struct wl_resource *) outputResource;
 
 @end
