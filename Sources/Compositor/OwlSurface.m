@@ -727,7 +727,9 @@ static const struct wl_surface_interface surface_interface = {
     }
 
     [self ensureMouseIsInside: event];
-    [[self pointer] sendMotionAtPoint: point];
+    [[self pointer] sendMotionAtPoint: point
+                               deltaX: [event deltaX]
+                               deltaY: [event deltaY]];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
@@ -737,7 +739,9 @@ static const struct wl_surface_interface surface_interface = {
     // motion must keep flowing (with out-of-bounds coordinates if
     // need be) so that e.g. a text selection can auto-scroll.
     [self ensureMouseIsInside: event];
-    [[self pointer] sendMotionAtPoint: [self pointOfEvent: event]];
+    [[self pointer] sendMotionAtPoint: [self pointOfEvent: event]
+                               deltaX: [event deltaX]
+                               deltaY: [event deltaY]];
     [[OwlServer sharedServer] flushClientsLater];
 }
 

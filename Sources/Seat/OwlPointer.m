@@ -21,6 +21,7 @@
 #import "OwlServer.h"
 #import "OwlSurface.h"
 #import "OwlBuffer.h"
+#import "OwlZwpRelativePointerManagerV1.h"
 
 
 @implementation OwlPointer
@@ -253,6 +254,20 @@ static void pointer_destroy(struct wl_resource *resource) {
         wl_fixed_from_double(point.y)
     );
     [self sendFrame];
+}
+
+// Like -sendMotionAtPoint:, but with the Cocoa event's relative
+// deltas, so that any zwp_relative_pointer_v1 of this client gets
+// its relative_motion within the same pointer frame.
+- (void) sendMotionAtPoint: (NSPoint) point
+                    deltaX: (CGFloat) deltaX
+                    deltaY: (CGFloat) deltaY
+{
+    [OwlZwpRelativePointerManagerV1
+        sendRelativeMotionForClient: wl_resource_get_client(_resource)
+                             deltaX: deltaX
+                             deltaY: deltaY];
+    [self sendMotionAtPoint: point];
 }
 
 - (void) sendLeaveSurface: (OwlSurface *) surface {

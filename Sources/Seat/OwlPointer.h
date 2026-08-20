@@ -42,6 +42,9 @@
 + (OwlPointer *) pointerForClient: (struct wl_client *) client;
 
 - (void) sendEnterSurface: (OwlSurface *) surface atPoint: (NSPoint) point;
+- (void) sendMotionAtPoint: (NSPoint) point
+                    deltaX: (CGFloat) deltaX
+                    deltaY: (CGFloat) deltaY;
 - (void) sendMotionAtPoint: (NSPoint) point;
 - (void) sendLeaveSurface: (OwlSurface *) surface;
 - (void) sendScrollByX: (CGFloat) deltaX byY: (CGFloat) deltaY;
