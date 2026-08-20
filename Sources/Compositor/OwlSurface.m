@@ -20,6 +20,7 @@
 #import "OwlCallback.h"
 #import "OwlWpPresentation.h"
 #import "OwlWpViewporter.h"
+#import "OwlWpFractionalScaleManagerV1.h"
 #import "OwlPointer.h"
 #import "OwlKeyboard.h"
 #import "OwlServer.h"
@@ -833,6 +834,12 @@ static const struct wl_surface_interface surface_interface = {
 
 - (BOOL) acceptsFirstResponder {
     return YES;
+}
+
+- (void) viewDidMoveToWindow {
+    // The backing scale of a surface is only really known once its
+    // view ends up in a window; let fractional-scale re-check.
+    [OwlWpFractionalScaleManagerV1 notifySurfaceMovedToWindow: self];
 }
 
 - (void) keyDown: (NSEvent *) event {
