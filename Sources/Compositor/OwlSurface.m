@@ -25,6 +25,7 @@
 #import "OwlKeyboard.h"
 #import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
 #import "OwlZwpPointerConstraintsV1.h"
+#import "OwlZwpTextInputManagerV3.h"
 #import "OwlServer.h"
 #import "OwlBuffer.h"
 #import "OwlSurfaceState.h"
@@ -638,6 +639,7 @@ static const struct wl_surface_interface surface_interface = {
     [_presentationFeedbacks release];
     [_currentState release];
     [_pendingState release];
+    [_markedText release];
     [super dealloc];
 }
 
@@ -917,6 +919,22 @@ static const struct wl_surface_interface surface_interface = {
     [OwlWpFractionalScaleManagerV1 notifySurfaceMovedToWindow: self];
 }
 
+// Whether this key event should be offered to the Cocoa input
+// context (for dead keys, non-Latin layouts, CJK composition)
+// rather than forwarded raw. Only when the client asked for text
+// via an enabled text-input, and never for chords that clients
+// expect as key events.
+- (BOOL) shouldRouteKeyEventToInputContext: (NSEvent *) event {
+    if ([event modifierFlags] & (NSCommandKeyMask | NSControlKeyMask)) {
+        return NO;
+    }
+    if ([self shortcutsInhibited]) {
+        return NO;
+    }
+    return [OwlZwpTextInputManagerV3
+        hasEnabledTextInputForSurfaceResource: _resource];
+}
+
 - (void) keyDown: (NSEvent *) event {
     OwlKeyboard *keyboard = [self keyboard];
     if (keyboard == nil) {
@@ -932,6 +950,21 @@ static const struct wl_surface_interface surface_interface = {
         // in the client.
         [[OwlServer sharedServer] flushClientsLater];
         return;
+    }
+    if ([self shouldRouteKeyEventToInputContext: event]) {
+        // Let the input context interpret the key. Text lands in
+        // -insertText:/-setMarkedText: and reaches the client as
+        // commit_string/preedit_string; the raw key is then not
+        // sent (and its keyUp is suppressed automatically, since
+        // the press was never recorded). Non-text keys come back
+        // through -doCommandBySelector:, which leaves the flag
+        // unset, and fall through to the raw path below.
+        _imeHandledKeyEvent = NO;
+        [self interpretKeyEvents: [NSArray arrayWithObject: event]];
+        if (_imeHandledKeyEvent) {
+            [[OwlServer sharedServer] flushClientsLater];
+            return;
+        }
     }
     // Don't forward Cocoa's autorepeat to version 4+ keyboards:
     // those clients repeat keys themselves based on the
@@ -975,6 +1008,189 @@ static const struct wl_surface_interface surface_interface = {
 - (void) flagsChanged: (NSEvent *) event {
     [self reconcileModifiersForEvent: event];
     [[OwlServer sharedServer] flushClientsLater];
+}
+
+/*
+ * NSTextInputClient: how the Cocoa input context talks back when
+ * -keyDown: hands it an event via -interpretKeyEvents:. Owl has no
+ * text storage of its own — the document lives in the client — so
+ * this is the minimal honest implementation: composition text is
+ * mirrored to the client as text-input preedit, insertions as
+ * commit strings, and everything document-shaped answers "unknown".
+ */
+
+// The input context speaks NSString or NSAttributedString
+// depending on its mood; owl only ever wants the characters.
+static NSString *plain_string(id string) {
+    if ([string isKindOfClass: [NSAttributedString class]]) {
+        return [string string];
+    }
+    return string;
+}
+
+// The protocol expresses preedit cursor positions as byte offsets
+// into the UTF-8 text; Cocoa gives us UTF-16 code unit indices.
+static int32_t byte_offset_for_index(NSString *string, NSUInteger index) {
+    if (string == nil) {
+        return 0;
+    }
+    if (index > [string length]) {
+        index = [string length];
+    }
+    const char *prefix = [[string substringToIndex: index] UTF8String];
+    if (prefix == NULL) {
+        return 0;
+    }
+    return (int32_t) strlen(prefix);
+}
+
+- (void) clearMarkedText {
+    [_markedText release];
+    _markedText = nil;
+}
+
+- (BOOL) hasMarkedText {
+    return _markedText != nil;
+}
+
+- (NSRange) markedRange {
+    if (_markedText == nil) {
+        return NSMakeRange(NSNotFound, 0);
+    }
+    return NSMakeRange(0, [_markedText length]);
+}
+
+- (NSRange) selectedRange {
+    // The document lives in the client; we cannot point into it.
+    return NSMakeRange(NSNotFound, 0);
+}
+
+- (void) setMarkedText: (id) string
+         selectedRange: (NSRange) selectedRange
+      replacementRange: (NSRange) replacementRange
+{
+    _imeHandledKeyEvent = YES;
+    NSString *text = plain_string(string);
+
+    [_markedText release];
+    if ([text length] > 0) {
+        _markedText = [text copy];
+    } else {
+        _markedText = nil;
+    }
+
+    // selectedRange is relative to the marked text itself; the
+    // protocol wants it as byte offsets into the UTF-8 preedit.
+    int32_t cursorBegin = byte_offset_for_index(
+        _markedText, selectedRange.location);
+    int32_t cursorEnd = byte_offset_for_index(
+        _markedText, selectedRange.location + selectedRange.length);
+
+    [OwlZwpTextInputManagerV3 sendPreeditString: _markedText
+                                    cursorBegin: cursorBegin
+                                      cursorEnd: cursorEnd
+                             forSurfaceResource: _resource];
+}
+
+// The pre-10.5 NSTextInput spelling, which GNUstep's (and old
+// input managers') -interpretKeyEvents: machinery still uses.
+- (void) setMarkedText: (id) string selectedRange: (NSRange) selectedRange {
+    [self setMarkedText: string
+          selectedRange: selectedRange
+       replacementRange: NSMakeRange(NSNotFound, 0)];
+}
+
+- (void) unmarkText {
+    // The input context wants the composition confirmed as-is.
+    _imeHandledKeyEvent = YES;
+    if (_markedText == nil) {
+        return;
+    }
+    NSString *text = _markedText;
+    _markedText = nil;
+    [OwlZwpTextInputManagerV3 sendCommitString: text
+                            forSurfaceResource: _resource];
+    [text release];
+}
+
+- (void) insertText: (id) string replacementRange: (NSRange) replacementRange {
+    _imeHandledKeyEvent = YES;
+    [self clearMarkedText];
+    // replacementRange is ignored: it indexes into a document we
+    // don't have. IMEs pass {NSNotFound, 0} for plain insertion,
+    // which is the case that matters.
+    [OwlZwpTextInputManagerV3 sendCommitString: plain_string(string)
+                            forSurfaceResource: _resource];
+}
+
+// The pre-10.5 spelling again, and also the path NSResponder's key
+// binding tables use.
+- (void) insertText: (id) string {
+    [self insertText: string replacementRange: NSMakeRange(NSNotFound, 0)];
+}
+
+- (void) doCommandBySelector: (SEL) selector {
+    // Non-text keys (arrows, Return, Backspace, Escape, Tab...)
+    // come back from the input context as editing commands. Leave
+    // _imeHandledKeyEvent unset: -keyDown: falls through to the
+    // raw wl_keyboard path, which is what clients expect for these
+    // keys. Deliberately not calling super, whose default would
+    // beep on every "unhandled" command.
+}
+
+- (NSArray *) validAttributesForMarkedText {
+    return [NSArray array];
+}
+
+- (NSAttributedString *) attributedSubstringForProposedRange: (NSRange) range
+                                                 actualRange: (NSRangePointer) actualRange
+{
+    // No document to substring into.
+    return nil;
+}
+
+- (NSUInteger) characterIndexForPoint: (NSPoint) point {
+    return NSNotFound;
+}
+
+- (NSRect) firstRectForCharacterRange: (NSRange) range
+                          actualRange: (NSRangePointer) actualRange
+{
+    // Place the IME candidate window at the cursor rectangle the
+    // client gave its text-input, or at the surface's top-left
+    // corner if it never did. The rectangle arrives in
+    // surface-local coordinates (top-left origin); Cocoa wants
+    // screen coordinates.
+    NSRect rect;
+    if (![OwlZwpTextInputManagerV3 getCursorRectangle: &rect
+                                   forSurfaceResource: _resource]) {
+        rect = NSMakeRect(0, 0, 1, 1);
+    }
+    NSRect viewRect = rect;
+    viewRect.origin.y =
+        [self bounds].size.height - rect.origin.y - rect.size.height;
+    NSRect windowRect = [self convertRect: viewRect toView: nil];
+    if ([self window] != nil) {
+        windowRect.origin =
+            [[self window] convertBaseToScreen: windowRect.origin];
+    }
+    return windowRect;
+}
+
+/* The rest of the pre-10.5 NSTextInput spellings, for input
+ * machinery (10.5's NSInputManager, GNUstep) that predates
+ * NSTextInputClient. */
+
+- (NSRect) firstRectForCharacterRange: (NSRange) range {
+    return [self firstRectForCharacterRange: range actualRange: NULL];
+}
+
+- (NSAttributedString *) attributedSubstringFromRange: (NSRange) range {
+    return nil;
+}
+
+- (long) conversationIdentifier {
+    return (long) self;
 }
 
 - (OwlWlDataDevice *) dataDevice {

@@ -32,9 +32,17 @@
 
 @end
 
-@interface OwlSurface : NSView {
+@interface OwlSurface : NSView <NSTextInputClient> {
     struct wl_resource *_resource;
     NSOpenGLContext *_openGLContext;
+
+    // The composition (preedit) string the Cocoa input context has
+    // going on this view, mirrored to the client's text-input as
+    // preedit_string; nil when no composition is active. Whether
+    // the input context consumed the key event being interpreted is
+    // tracked so -keyDown: knows to skip the raw key path.
+    NSString *_markedText;
+    BOOL _imeHandledKeyEvent;
 
     // Mouse tracking rectangle.
     NSTrackingRectTag _trackingRectTag;
@@ -123,5 +131,10 @@
 - (void) unsetPendingViewportSource;
 - (void) setPendingViewportDestination: (NSSize) destination;
 - (void) unsetPendingViewportDestination;
+
+/* Abandon any composition the Cocoa input context has on this
+ * view; called by text-input when the client disables its text
+ * input or the keyboard focus leaves. */
+- (void) clearMarkedText;
 
 @end

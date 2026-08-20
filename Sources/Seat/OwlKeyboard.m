@@ -25,6 +25,7 @@
 #import <unistd.h>
 #import "OwlServer.h"
 #import "OwlSurface.h"
+#import "OwlZwpTextInputManagerV3.h"
 #import "OwlFeatures.h"
 
 #ifdef OWL_PLATFORM_APPLE
@@ -520,11 +521,16 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
 
     // The protocol requires a modifiers event to follow enter.
     [self sendCurrentModifiers];
+
+    // Text inputs follow the keyboard focus.
+    [OwlZwpTextInputManagerV3 keyboardEnteredSurface: surface];
 }
 
 - (void) sendLeaveSurface: (OwlSurface *) surface {
     uint32_t serial = [[OwlServer sharedServer] nextSerial];
     wl_keyboard_send_leave(_resource, serial, [surface resource]);
+
+    [OwlZwpTextInputManagerV3 keyboardLeftSurface: surface];
 }
 
 @end

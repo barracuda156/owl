@@ -38,6 +38,7 @@
 #import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
 #import "OwlZwpRelativePointerManagerV1.h"
 #import "OwlZwpPointerConstraintsV1.h"
+#import "OwlZwpTextInputManagerV3.h"
 #import "OwlOutput.h"
 #import "OwlZxdgOutputManagerV1.h"
 #import "OwlWlDataDeviceManager.h"
@@ -156,6 +157,7 @@
     [OwlZwpKeyboardShortcutsInhibitManagerV1 addGlobalToDisplay: _display];
     [OwlZwpRelativePointerManagerV1 addGlobalToDisplay: _display];
     [OwlZwpPointerConstraintsV1 addGlobalToDisplay: _display];
+    [OwlZwpTextInputManagerV3 addGlobalToDisplay: _display];
     [OwlOutput addGlobalToDisplay: _display];
     [OwlZxdgOutputManagerV1 addGlobalToDisplay: _display];
 
