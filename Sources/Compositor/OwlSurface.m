@@ -742,6 +742,10 @@ static const struct wl_surface_interface surface_interface = {
     [[OwlServer sharedServer] flushClientsLater];
 }
 
+- (BOOL) mouseIsInside {
+    return _mouseIsInside;
+}
+
 - (void) ensureMouseIsInside: (NSEvent *) event {
     if (!_mouseIsInside) {
         // We haven't been told the mouse is inside our view,

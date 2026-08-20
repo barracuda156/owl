@@ -41,6 +41,7 @@
 #import "OwlZwpRelativePointerManagerV1.h"
 #import "OwlZwpPointerConstraintsV1.h"
 #import "OwlZwpTextInputManagerV3.h"
+#import "OwlWpPointerWarpV1.h"
 #import "OwlOutput.h"
 #import "OwlZxdgOutputManagerV1.h"
 #import "OwlWlDataDeviceManager.h"
@@ -162,6 +163,7 @@
     [OwlZwpRelativePointerManagerV1 addGlobalToDisplay: _display];
     [OwlZwpPointerConstraintsV1 addGlobalToDisplay: _display];
     [OwlZwpTextInputManagerV3 addGlobalToDisplay: _display];
+    [OwlWpPointerWarpV1 addGlobalToDisplay: _display];
     [OwlOutput addGlobalToDisplay: _display];
     [OwlZxdgOutputManagerV1 addGlobalToDisplay: _display];
 

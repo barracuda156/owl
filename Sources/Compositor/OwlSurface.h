@@ -20,6 +20,7 @@
 #import <wayland-server.h>
 
 @class OwlBuffer;
+@class OwlPointer;
 @class OwlSurfaceState;
 @class OwlWpPresentationFeedback;
 @class OwlWpViewport;
@@ -140,5 +141,11 @@
  * view; called by text-input when the client disables its text
  * input or the keyboard focus leaves. */
 - (void) clearMarkedText;
+
+- (OwlPointer *) pointer;
+
+/* Whether this surface believes it has the pointer inside (i.e.
+ * holds the pointer focus of its client). */
+- (BOOL) mouseIsInside;
 
 @end
