@@ -175,9 +175,12 @@ static void xdg_surface_get_popup_handler(
     struct wl_resource *positioner_resource
 ) {
     OwlXdgSurface *self = wl_resource_get_user_data(resource);
+    // NULL rather than nil: GCC's ObjC headers define nil as (id)0,
+    // which fails to parse here where the id type is shadowed by the
+    // "id" parameter of this handler.
     OwlXdgSurface *parentXdgSurface = parent_resource != NULL
         ? wl_resource_get_user_data(parent_resource)
-        : nil;
+        : NULL;
     OwlXdgPositioner *positioner = wl_resource_get_user_data(positioner_resource);
 
     struct wl_resource *popup_resource = wl_resource_create(
