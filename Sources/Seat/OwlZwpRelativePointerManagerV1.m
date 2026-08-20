@@ -21,16 +21,20 @@
 #import "relative-pointer-unstable-v1.h"
 
 
-/* One zwp_relative_pointer_v1. The wl_pointer it was created for is
- * not kept: owl has a single pointer per client, so matching by
- * client at send time is equivalent (Hyprland's RelativePointer.cpp
- * does the same). */
+/* One zwp_relative_pointer_v1. Owl has a single pointer per
+ * client, so relative_motion is fanned out by client match at send
+ * time (as Hyprland's RelativePointer.cpp does); the wl_pointer
+ * this was created for is only watched for its destruction, which
+ * per the spec turns this object inert. */
 @interface OwlZwpRelativePointer : NSObject {
 @public
     struct wl_resource *_resource;
+    struct wl_resource *_pointerResource;
+    struct wl_listener _pointerDestroyListener;
 }
 
-- (id) initWithResource: (struct wl_resource *) resource;
+- (id) initWithResource: (struct wl_resource *) resource
+        pointerResource: (struct wl_resource *) pointerResource;
 
 @end
 
@@ -42,6 +46,26 @@ static NSMutableArray *relativePointers;
     if (relativePointers == nil) {
         relativePointers = [[NSMutableArray alloc] initWithCapacity: 1];
     }
+}
+
+static void relative_pointer_pointer_destroy_notify(
+    struct wl_listener *listener,
+    void *data
+) {
+    OwlZwpRelativePointer *self = nil;
+    for (OwlZwpRelativePointer *relativePointer in relativePointers) {
+        if (&relativePointer->_pointerDestroyListener == listener) {
+            self = relativePointer;
+            break;
+        }
+    }
+    if (self == nil) {
+        return;
+    }
+
+    self->_pointerResource = NULL;
+    wl_list_remove(&self->_pointerDestroyListener.link);
+    wl_list_init(&self->_pointerDestroyListener.link);
 }
 
 static void relative_pointer_destroy(struct wl_resource *resource) {
@@ -61,8 +85,16 @@ static const struct zwp_relative_pointer_v1_interface relative_pointer_impl = {
     .destroy = relative_pointer_destroy_handler
 };
 
-- (id) initWithResource: (struct wl_resource *) resource {
+- (id) initWithResource: (struct wl_resource *) resource
+        pointerResource: (struct wl_resource *) pointerResource
+{
     _resource = resource;
+    _pointerResource = pointerResource;
+    _pointerDestroyListener.notify = relative_pointer_pointer_destroy_notify;
+    wl_resource_add_destroy_listener(
+        pointerResource,
+        &_pointerDestroyListener
+    );
     [relativePointers addObject: self];
     wl_resource_set_implementation(
         resource,
@@ -71,6 +103,13 @@ static const struct zwp_relative_pointer_v1_interface relative_pointer_impl = {
         relative_pointer_destroy
     );
     return self;
+}
+
+- (void) dealloc {
+    if (_pointerResource != NULL) {
+        wl_list_remove(&_pointerDestroyListener.link);
+    }
+    [super dealloc];
 }
 
 @end
@@ -97,6 +136,11 @@ static const struct zwp_relative_pointer_v1_interface relative_pointer_impl = {
 
     for (OwlZwpRelativePointer *relativePointer in relativePointers) {
         if (wl_resource_get_client(relativePointer->_resource) != client) {
+            continue;
+        }
+        if (relativePointer->_pointerResource == NULL) {
+            // The wl_pointer this was created for is gone; the
+            // object stays around but goes inert.
             continue;
         }
         zwp_relative_pointer_v1_send_relative_motion(
@@ -136,7 +180,8 @@ static void relative_pointer_manager_get_relative_pointer_handler(
         id
     );
     OwlZwpRelativePointer *relativePointer = [OwlZwpRelativePointer alloc];
-    [[relativePointer initWithResource: relative_pointer_resource] release];
+    [[relativePointer initWithResource: relative_pointer_resource
+                       pointerResource: pointer_resource] release];
 }
 
 static const struct zwp_relative_pointer_manager_v1_interface

@@ -26,6 +26,7 @@
 #import "OwlServer.h"
 #import "OwlSurface.h"
 #import "OwlZwpTextInputManagerV3.h"
+#import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
 #import "OwlFeatures.h"
 
 #ifdef OWL_PLATFORM_APPLE
@@ -519,8 +520,26 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
     wl_keyboard_send_enter(_resource, serial, [surface resource], &keys);
     wl_array_release(&keys);
 
-    // The protocol requires a modifiers event to follow enter.
-    [self sendCurrentModifiers];
+    // The protocol requires a modifiers event to follow enter. The
+    // globally tracked state may contain Mod4 from Command being
+    // forwarded to a shortcuts-inhibited surface; when the focus
+    // lands on a surface without an inhibitor, mask it out — that
+    // surface must not see the compositor's own modifier. (The
+    // per-event reconcile catches up with the real state on the
+    // next event either way.)
+    uint32_t depressed = current_mods_depressed;
+    if (![OwlZwpKeyboardShortcutsInhibitManagerV1
+             shortcutsInhibitedForSurfaceResource: [surface resource]]) {
+        depressed &= ~OWL_MOD_MOD4;
+    }
+    wl_keyboard_send_modifiers(
+        _resource,
+        [[OwlServer sharedServer] nextSerial],
+        depressed,
+        0,
+        current_mods_locked,
+        0
+    );
 
     // Text inputs follow the keyboard focus.
     [OwlZwpTextInputManagerV3 keyboardEnteredSurface: surface];

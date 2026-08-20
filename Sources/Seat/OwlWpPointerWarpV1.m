@@ -54,6 +54,14 @@ static void pointer_warp_warp_pointer_handler(
     if (![surface mouseIsInside]) {
         return;
     }
+    // Also ignore warps while the pointer is locked to the surface:
+    // moving the pinned cursor would fight the lock, and sending
+    // the absolute motion below is forbidden while locked. The spec
+    // itself notes warping is no substitute for locking.
+    if ([OwlZwpPointerConstraintsV1
+            hasActiveLockForSurfaceResource: surface_resource]) {
+        return;
+    }
 
     NSPoint point = NSMakePoint(wl_fixed_to_double(x), wl_fixed_to_double(y));
     // Ignore warps to outside the surface, with the same 1px margin

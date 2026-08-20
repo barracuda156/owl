@@ -32,6 +32,7 @@
 #import "OwlRegion.h"
 #import "OwlWlDataDevice.h"
 #import "OwlDragDataSource.h"
+#import "OwlFeatures.h"
 #import "viewporter.h"
 #import <wayland-server.h>
 #import <Cocoa/Cocoa.h>
@@ -818,12 +819,24 @@ static const struct wl_surface_interface surface_interface = {
         [[OwlServer sharedServer] flushClientsLater];
         return;
     }
+    NSPoint point = [self pointOfEvent: event];
+    if (!NSPointInRect(point, [self bounds])
+        && [OwlZwpPointerConstraintsV1
+               hasActiveConfinementForSurfaceResource: _resource]) {
+        // Confined: hold the line even mid-drag. Tracking rects
+        // don't reliably fire -mouseExited: while a button is
+        // down, so this is where a dragging escape gets caught;
+        // the client sees motion clamped to the surface.
+        point = [self nearestInBoundsPoint: point];
+        [OwlZwpPointerConstraintsV1 warpPointerToSurface: self
+                                                   point: point];
+    }
     // Unlike -mouseMoved:, don't bail out when the point is
     // outside our bounds: the client holds an implicit grab, and
     // motion must keep flowing (with out-of-bounds coordinates if
     // need be) so that e.g. a text selection can auto-scroll.
     [self ensureMouseIsInside: event];
-    [[self pointer] sendMotionAtPoint: [self pointOfEvent: event]
+    [[self pointer] sendMotionAtPoint: point
                                deltaX: [event deltaX]
                                deltaY: [event deltaY]];
     [[OwlServer sharedServer] flushClientsLater];
@@ -951,6 +964,10 @@ static const struct wl_surface_interface surface_interface = {
     // The backing scale of a surface is only really known once its
     // view ends up in a window; let fractional-scale re-check.
     [OwlWpFractionalScaleManagerV1 notifySurfaceMovedToWindow: self];
+    // A pointer constraint created before the surface had a window
+    // gets its chance to activate now: if the window is already
+    // key, no NSWindowDidBecomeKeyNotification will ever fire.
+    [OwlZwpPointerConstraintsV1 notifySurfaceMovedToWindow: self];
 }
 
 // Whether this key event should be offered to the Cocoa input
@@ -1079,8 +1096,20 @@ static int32_t byte_offset_for_index(NSString *string, NSUInteger index) {
 }
 
 - (void) clearMarkedText {
+    if (_markedText == nil) {
+        return;
+    }
     [_markedText release];
     _markedText = nil;
+#if defined(OWL_PLATFORM_APPLE) && MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+    // Owl abandoned the composition (focus left, or the client
+    // disabled its text input); the input context must not keep
+    // its half, or the next keystroke would resume a composition
+    // whose preedit the client already discarded.
+    if ([self respondsToSelector: @selector(inputContext)]) {
+        [[self inputContext] discardMarkedText];
+    }
+#endif
 }
 
 - (BOOL) hasMarkedText {

@@ -75,6 +75,12 @@ static OwlSurface *focused_owl_surface(void) {
 
 static NSMutableArray *textInputs;
 
+/* The single enabled text input, if any: the protocol requires
+ * that enabling a text input while another one is enabled on the
+ * seat is ignored. Not retained; cleared when it is disabled or
+ * destroyed. */
+static OwlZwpTextInput *active_text_input;
+
 + (void) initialize {
     if (textInputs == nil) {
         textInputs = [[NSMutableArray alloc] initWithCapacity: 1];
@@ -87,6 +93,9 @@ static NSMutableArray *textInputs;
 
 static void text_input_destroy(struct wl_resource *resource) {
     OwlZwpTextInput *self = wl_resource_get_user_data(resource);
+    if (active_text_input == self) {
+        active_text_input = nil;
+    }
     [textInputs removeObjectIdenticalTo: self];
     [self release];
 }
@@ -179,8 +188,31 @@ static void text_input_commit_handler(
     self->_commitCount++;
 
     BOOL wasEnabled = self->_enabled;
+    BOOL enabling = !wasEnabled && self->_pendingEnabled;
+
+    if (enabling) {
+        // The protocol requires ignoring an enable while another
+        // text input is enabled on the seat. Also decline clients
+        // enabling without keyboard focus: preedit/commit events
+        // only ever target the focused client, so an out-of-focus
+        // enable could otherwise squat the active slot.
+        OwlSurface *focused = focused_owl_surface();
+        BOOL taken = active_text_input != nil
+            && active_text_input != self
+            && active_text_input->_enabled;
+        if (taken
+            || focused == nil
+            || wl_resource_get_client([focused resource]) != client) {
+            self->_pendingEnabled = NO;
+        }
+    }
 
     self->_enabled = self->_pendingEnabled;
+    if (self->_enabled) {
+        active_text_input = self;
+    } else if (active_text_input == self) {
+        active_text_input = nil;
+    }
     self->_cursorRectangleIsSet = self->_pendingCursorRectangleIsSet;
     self->_cursorRectangle = self->_pendingCursorRectangle;
     NSString *surrounding = [self->_pendingSurroundingText retain];
@@ -295,16 +327,25 @@ static const struct zwp_text_input_v3_interface text_input_impl = {
     [[OwlServer sharedServer] flushClientsLater];
 }
 
+/* The active text input, if it belongs to the client of the given
+ * surface; text events only ever go to this one object. */
+static OwlZwpTextInput *active_text_input_for_surface(
+    struct wl_resource *surfaceResource
+) {
+    if (active_text_input == nil || !active_text_input->_enabled) {
+        return nil;
+    }
+    struct wl_client *client = wl_resource_get_client(surfaceResource);
+    if ([active_text_input client] != client) {
+        return nil;
+    }
+    return active_text_input;
+}
+
 + (BOOL) hasEnabledTextInputForSurfaceResource:
     (struct wl_resource *) surfaceResource
 {
-    struct wl_client *client = wl_resource_get_client(surfaceResource);
-    for (OwlZwpTextInput *textInput in textInputs) {
-        if ([textInput client] == client && textInput->_enabled) {
-            return YES;
-        }
-    }
-    return NO;
+    return active_text_input_for_surface(surfaceResource) != nil;
 }
 
 + (void) sendPreeditString: (NSString *) text
@@ -312,64 +353,56 @@ static const struct zwp_text_input_v3_interface text_input_impl = {
                  cursorEnd: (int32_t) cursorEnd
         forSurfaceResource: (struct wl_resource *) surfaceResource
 {
-    struct wl_client *client = wl_resource_get_client(surfaceResource);
-    const char *utf8 = [text UTF8String];
-    for (OwlZwpTextInput *textInput in textInputs) {
-        if ([textInput client] != client || !textInput->_enabled) {
-            continue;
-        }
-        zwp_text_input_v3_send_preedit_string(
-            textInput->_resource,
-            utf8,
-            cursorBegin,
-            cursorEnd
-        );
-        zwp_text_input_v3_send_done(
-            textInput->_resource,
-            textInput->_commitCount
-        );
+    OwlZwpTextInput *textInput =
+        active_text_input_for_surface(surfaceResource);
+    if (textInput == nil) {
+        return;
     }
+    zwp_text_input_v3_send_preedit_string(
+        textInput->_resource,
+        [text UTF8String],
+        cursorBegin,
+        cursorEnd
+    );
+    zwp_text_input_v3_send_done(
+        textInput->_resource,
+        textInput->_commitCount
+    );
     [[OwlServer sharedServer] flushClientsLater];
 }
 
 + (void) sendCommitString: (NSString *) text
        forSurfaceResource: (struct wl_resource *) surfaceResource
 {
-    struct wl_client *client = wl_resource_get_client(surfaceResource);
-    const char *utf8 = [text UTF8String];
-    for (OwlZwpTextInput *textInput in textInputs) {
-        if ([textInput client] != client || !textInput->_enabled) {
-            continue;
-        }
-        // No preedit_string before this done: the pending preedit
-        // defaults to empty, so the done below also clears any
-        // composition shown by the client.
-        zwp_text_input_v3_send_commit_string(
-            textInput->_resource,
-            utf8
-        );
-        zwp_text_input_v3_send_done(
-            textInput->_resource,
-            textInput->_commitCount
-        );
+    OwlZwpTextInput *textInput =
+        active_text_input_for_surface(surfaceResource);
+    if (textInput == nil) {
+        return;
     }
+    // No preedit_string before this done: the pending preedit
+    // defaults to empty, so the done below also clears any
+    // composition shown by the client.
+    zwp_text_input_v3_send_commit_string(
+        textInput->_resource,
+        [text UTF8String]
+    );
+    zwp_text_input_v3_send_done(
+        textInput->_resource,
+        textInput->_commitCount
+    );
     [[OwlServer sharedServer] flushClientsLater];
 }
 
 + (BOOL) getCursorRectangle: (NSRect *) rect
          forSurfaceResource: (struct wl_resource *) surfaceResource
 {
-    struct wl_client *client = wl_resource_get_client(surfaceResource);
-    for (OwlZwpTextInput *textInput in textInputs) {
-        if ([textInput client] != client || !textInput->_enabled) {
-            continue;
-        }
-        if (textInput->_cursorRectangleIsSet) {
-            *rect = textInput->_cursorRectangle;
-            return YES;
-        }
+    OwlZwpTextInput *textInput =
+        active_text_input_for_surface(surfaceResource);
+    if (textInput == nil || !textInput->_cursorRectangleIsSet) {
+        return NO;
     }
-    return NO;
+    *rect = textInput->_cursorRectangle;
+    return YES;
 }
 
 static void text_input_manager_destroy(struct wl_resource *resource) {

@@ -53,6 +53,11 @@
 + (BOOL) hasActiveConfinementForSurfaceResource:
     (struct wl_resource *) surfaceResource;
 
+/* Called by OwlSurface when its view lands in a window: a
+ * constraint created before that has had no chance to activate,
+ * and if the window is already key, no notification will fire. */
++ (void) notifySurfaceMovedToWindow: (OwlSurface *) surface;
+
 /* Warp the hardware cursor to the given point, expressed in the
  * surface's local coordinates (top-left origin). A no-op without
  * CoreGraphics (GNUstep). */

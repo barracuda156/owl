@@ -304,6 +304,15 @@ static const struct zwp_confined_pointer_v1_interface confined_pointer_impl = {
     return constraint != nil && constraint->_active && !constraint->_isLock;
 }
 
++ (void) notifySurfaceMovedToWindow: (OwlSurface *) surface {
+    if (![[surface window] isKeyWindow]) {
+        return;
+    }
+    OwlZwpPointerConstraint *constraint = [OwlZwpPointerConstraint
+        constraintForSurfaceResource: [surface resource]];
+    [constraint activate];
+}
+
 + (void) warpPointerToSurface: (OwlSurface *) surface
                         point: (NSPoint) point
 {
