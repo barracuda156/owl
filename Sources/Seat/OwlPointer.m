@@ -270,6 +270,22 @@ static void pointer_destroy(struct wl_resource *resource) {
     [self sendMotionAtPoint: point];
 }
 
+// Relative motion with no absolute component: the locked-pointer
+// case, where the spec forbids wl_pointer.motion but relative
+// motion must keep flowing.
+- (void) sendRelativeMotionDeltaX: (CGFloat) deltaX
+                           deltaY: (CGFloat) deltaY
+{
+    if (deltaX == 0.0 && deltaY == 0.0) {
+        return;
+    }
+    [OwlZwpRelativePointerManagerV1
+        sendRelativeMotionForClient: wl_resource_get_client(_resource)
+                             deltaX: deltaX
+                             deltaY: deltaY];
+    [self sendFrame];
+}
+
 - (void) sendLeaveSurface: (OwlSurface *) surface {
     wl_pointer_send_leave(
         _resource,

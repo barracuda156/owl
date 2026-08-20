@@ -45,6 +45,8 @@
 - (void) sendMotionAtPoint: (NSPoint) point
                     deltaX: (CGFloat) deltaX
                     deltaY: (CGFloat) deltaY;
+- (void) sendRelativeMotionDeltaX: (CGFloat) deltaX
+                           deltaY: (CGFloat) deltaY;
 - (void) sendMotionAtPoint: (NSPoint) point;
 - (void) sendLeaveSurface: (OwlSurface *) surface;
 - (void) sendScrollByX: (CGFloat) deltaX byY: (CGFloat) deltaY;

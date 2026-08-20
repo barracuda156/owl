@@ -24,6 +24,7 @@
 #import "OwlPointer.h"
 #import "OwlKeyboard.h"
 #import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
+#import "OwlZwpPointerConstraintsV1.h"
 #import "OwlServer.h"
 #import "OwlBuffer.h"
 #import "OwlSurfaceState.h"
@@ -717,11 +718,50 @@ static const struct wl_surface_interface surface_interface = {
     }
 }
 
+// The surface point nearest to the given one that is comfortably
+// inside our bounds, for warping a confined pointer back in.
+- (NSPoint) nearestInBoundsPoint: (NSPoint) point {
+    NSSize size = [self bounds].size;
+    if (point.x < 1.0) {
+        point.x = 1.0;
+    }
+    if (point.x > size.width - 1.0) {
+        point.x = size.width - 1.0;
+    }
+    if (point.y < 1.0) {
+        point.y = 1.0;
+    }
+    if (point.y > size.height - 1.0) {
+        point.y = size.height - 1.0;
+    }
+    return point;
+}
+
 - (void) mouseMoved: (NSEvent *) event {
+    if ([OwlZwpPointerConstraintsV1
+            hasActiveLockForSurfaceResource: _resource]) {
+        // The pointer is locked: the cursor is pinned, but deltas
+        // keep coming. Only relative motion goes to the client.
+        [self ensureMouseIsInside: event];
+        [[self pointer] sendRelativeMotionDeltaX: [event deltaX]
+                                          deltaY: [event deltaY]];
+        [[OwlServer sharedServer] flushClientsLater];
+        return;
+    }
+
     NSPoint point = [self pointOfEvent: event];
     // See whether the mouse is really inside our view.
     // If it's outside our view, stop receiving mouse events.
     if (!NSPointInRect(point, [self bounds])) {
+        if ([OwlZwpPointerConstraintsV1
+                hasActiveConfinementForSurfaceResource: _resource]) {
+            // Confined: put the cursor back at the nearest point
+            // inside the surface instead of letting it escape.
+            [OwlZwpPointerConstraintsV1
+                warpPointerToSurface: self
+                               point: [self nearestInBoundsPoint: point]];
+            return;
+        }
         [[self window] setAcceptsMouseMovedEvents: NO];
         return;
     }
@@ -734,6 +774,14 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) mouseDragged: (NSEvent *) event {
+    if ([OwlZwpPointerConstraintsV1
+            hasActiveLockForSurfaceResource: _resource]) {
+        [self ensureMouseIsInside: event];
+        [[self pointer] sendRelativeMotionDeltaX: [event deltaX]
+                                          deltaY: [event deltaY]];
+        [[OwlServer sharedServer] flushClientsLater];
+        return;
+    }
     // Unlike -mouseMoved:, don't bail out when the point is
     // outside our bounds: the client holds an implicit grab, and
     // motion must keep flowing (with out-of-bounds coordinates if
@@ -746,6 +794,15 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) mouseExited: (NSEvent *) event {
+    if ([OwlZwpPointerConstraintsV1
+            hasActiveConfinementForSurfaceResource: _resource]) {
+        // Confined: the cursor left the surface; bring it right
+        // back rather than delivering a leave.
+        NSPoint point = [self nearestInBoundsPoint: [self pointOfEvent: event]];
+        [OwlZwpPointerConstraintsV1 warpPointerToSurface: self
+                                                   point: point];
+        return;
+    }
     if (_buttonsDown > 0) {
         // Keep the implicit grab: deliver the leave once the
         // buttons are released instead.

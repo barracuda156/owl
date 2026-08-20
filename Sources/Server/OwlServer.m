@@ -37,6 +37,7 @@
 #import "OwlWpCursorShapeManagerV1.h"
 #import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
 #import "OwlZwpRelativePointerManagerV1.h"
+#import "OwlZwpPointerConstraintsV1.h"
 #import "OwlOutput.h"
 #import "OwlZxdgOutputManagerV1.h"
 #import "OwlWlDataDeviceManager.h"
@@ -154,6 +155,7 @@
     [OwlWpCursorShapeManagerV1 addGlobalToDisplay: _display];
     [OwlZwpKeyboardShortcutsInhibitManagerV1 addGlobalToDisplay: _display];
     [OwlZwpRelativePointerManagerV1 addGlobalToDisplay: _display];
+    [OwlZwpPointerConstraintsV1 addGlobalToDisplay: _display];
     [OwlOutput addGlobalToDisplay: _display];
     [OwlZxdgOutputManagerV1 addGlobalToDisplay: _display];
 
