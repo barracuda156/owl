@@ -132,6 +132,10 @@
 - (void) setPendingViewportDestination: (NSSize) destination;
 - (void) unsetPendingViewportDestination;
 
+/* wp_alpha_modifier support: like all surface state, the
+ * multiplier is double-buffered and takes effect on commit. */
+- (void) setPendingAlphaMultiplier: (double) alphaMultiplier;
+
 /* Abandon any composition the Cocoa input context has on this
  * view; called by text-input when the client disables its text
  * input or the keyboard focus leaves. */

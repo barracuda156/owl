@@ -40,6 +40,9 @@
     NSRect _viewportSource;
     BOOL _viewportDestinationIsSet;
     NSSize _viewportDestination;
+    // The wp_alpha_modifier_surface_v1 multiplier, 1.0 when none
+    // is in effect.
+    double _alphaMultiplier;
 }
 
 - (id) init;
@@ -72,6 +75,9 @@
 - (NSSize) viewportDestination;
 - (void) setViewportDestination: (NSSize) destination;
 - (void) unsetViewportDestination;
+
+- (double) alphaMultiplier;
+- (void) setAlphaMultiplier: (double) alphaMultiplier;
 
 /* Whether the two states crop and scale identically; when they do
  * not, the same buffer maps onto the view differently, so damage

@@ -251,6 +251,10 @@ static void surface_damage_buffer_handler(
     [_pendingState unsetViewportDestination];
 }
 
+- (void) setPendingAlphaMultiplier: (double) alphaMultiplier {
+    [_pendingState setAlphaMultiplier: alphaMultiplier];
+}
+
 // Enforce the wp_viewport rules that are only checked at commit
 // time, against the buffer that is about to be applied. Returns NO
 // after posting a protocol error, in which case the pending state
@@ -340,6 +344,9 @@ static void surface_damage_buffer_handler(
     // previous one; computed before the swap while both states
     // are still around.
     BOOL viewportChanged = ![_pendingState hasSameViewportAs: _currentState];
+    // Same for the alpha multiplier: a change repaints everything.
+    BOOL alphaChanged = [_pendingState alphaMultiplier]
+        != [_currentState alphaMultiplier];
 
     // Actually set the pending state as our new state.
     [_currentState release];
@@ -408,7 +415,7 @@ static void surface_damage_buffer_handler(
     }
 
     // Now, tell Cocoa to redraw this view.
-    if (damageAll || viewportChanged) {
+    if (damageAll || viewportChanged || alphaChanged) {
         [self setNeedsDisplay: YES];
         willRedraw = YES;
     } else if (viewportActive) {
@@ -497,12 +504,35 @@ static void surface_commit_handler(
     [_openGLContext setView: self];
     [_openGLContext makeCurrentContext];
 
+    // Honor the wp_alpha_modifier_surface_v1 multiplier by drawing
+    // the buffer through a transparency layer. This covers the
+    // CG-drawn buffer types (shm, single-pixel); GL-composited
+    // IOSurface buffers bypass the CG context and keep full
+    // opacity. Not available on GNUstep, which has no CGContext.
+#ifdef OWL_PLATFORM_APPLE
+    double alpha = [_currentState alphaMultiplier];
+    CGContextRef context = NULL;
+    if (alpha < 1.0) {
+        context = [[NSGraphicsContext currentContext] graphicsPort];
+        CGContextSaveGState(context);
+        CGContextSetAlpha(context, alpha);
+        CGContextBeginTransparencyLayer(context, NULL);
+    }
+#endif
+
     if ([_currentState viewportSourceIsSet]) {
         [[_currentState buffer] drawInRect: [self bounds]
                                   fromRect: [_currentState viewportSource]];
     } else {
         [[_currentState buffer] drawInRect: [self bounds]];
     }
+
+#ifdef OWL_PLATFORM_APPLE
+    if (context != NULL) {
+        CGContextEndTransparencyLayer(context);
+        CGContextRestoreGState(context);
+    }
+#endif
 
     // We have painted; so send out all callbacks
     // and presentation feedbacks.

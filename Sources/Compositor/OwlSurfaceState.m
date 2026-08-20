@@ -26,6 +26,7 @@
     _callbacks = [NSMutableArray new];
     _presentationFeedbacks = [NSMutableArray new];
     _damage = [NSMutableArray new];
+    _alphaMultiplier = 1.0;
     return self;
 }
 
@@ -43,6 +44,7 @@
     _viewportSource = previousState->_viewportSource;
     _viewportDestinationIsSet = previousState->_viewportDestinationIsSet;
     _viewportDestination = previousState->_viewportDestination;
+    _alphaMultiplier = previousState->_alphaMultiplier;
     return self;
 }
 
@@ -142,6 +144,14 @@
 - (void) unsetViewportDestination {
     _viewportDestinationIsSet = NO;
     _viewportDestination = NSZeroSize;
+}
+
+- (double) alphaMultiplier {
+    return _alphaMultiplier;
+}
+
+- (void) setAlphaMultiplier: (double) alphaMultiplier {
+    _alphaMultiplier = alphaMultiplier;
 }
 
 - (BOOL) hasSameViewportAs: (OwlSurfaceState *) other {
