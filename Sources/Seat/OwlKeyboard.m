@@ -37,6 +37,7 @@
 #define OWL_MOD_LOCK    2
 #define OWL_MOD_CONTROL 4
 #define OWL_MOD_MOD1    8   /* Option/Alt */
+#define OWL_MOD_MOD4    64  /* Command, when shortcuts are inhibited */
 
 /* Evdev keycodes for (left) modifier keys. */
 #define OWL_KEY_LEFTCTRL   29
@@ -404,10 +405,15 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
     );
 }
 
-- (void) reconcileModifierFlags: (NSUInteger) flags {
+- (void) reconcileModifierFlags: (NSUInteger) flags
+                 includeCommand: (BOOL) includeCommand
+{
     // Command is deliberately absent from this table: it is the
     // compositor's modifier (menu shortcuts like Cmd+C/Cmd+V), so
-    // clients never see it as Mod4 or as a Meta key press.
+    // clients normally never see it as Mod4 or as a Meta key press.
+    // The exception is a surface holding a keyboard shortcuts
+    // inhibitor, for which includeCommand is YES and Command is
+    // reconciled separately below.
     static const struct {
         NSUInteger cocoaMask;
         uint32_t modMask;
@@ -423,7 +429,16 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
     BOOL modsChanged = NO;
     size_t i;
 
-    if (changed == 0) {
+    // Whether the client should currently see Command held down as
+    // Super/Mod4, vs. whether it does. These can disagree without
+    // any flags change, e.g. when the keyboard focus moves between
+    // an inhibited and a non-inhibited surface with Command held.
+    BOOL commandDown = (flags & NSCommandKeyMask) ? YES : NO;
+    BOOL commandForwarded =
+        (current_mods_depressed & OWL_MOD_MOD4) ? YES : NO;
+    BOOL forwardCommand = includeCommand && commandDown;
+
+    if (changed == 0 && forwardCommand == commandForwarded) {
         return;
     }
 
@@ -451,11 +466,27 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
         modsChanged = YES;
     }
 
-    if ((changed & NSCommandKeyMask) && (flags & NSCommandKeyMask)) {
-        // Command is engaging. Cocoa will not deliver keyUp for
-        // keys released while Command is held, so release
-        // everything now rather than leave keys stuck down
-        // (and autorepeating) in the client.
+    if (forwardCommand != commandForwarded) {
+        if (forwardCommand) {
+            current_mods_depressed |= OWL_MOD_MOD4;
+            [self sendKeyRaw: OWL_KEY_LEFTMETA isPressed: YES];
+        } else {
+            current_mods_depressed &= ~OWL_MOD_MOD4;
+            [self sendKeyRaw: OWL_KEY_LEFTMETA isPressed: NO];
+            // Cocoa does not deliver keyUp for keys released while
+            // Command is held, so any chord keys we forwarded are
+            // potentially stuck down in the client; release them.
+            [self releaseAllKeys];
+        }
+        modsChanged = YES;
+    }
+
+    if (!includeCommand
+        && (changed & NSCommandKeyMask) && commandDown) {
+        // Command is engaging and belongs to the compositor. Cocoa
+        // will not deliver keyUp for keys released while Command is
+        // held, so release everything now rather than leave keys
+        // stuck down (and autorepeating) in the client.
         [self releaseAllKeys];
     }
 
@@ -466,8 +497,8 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
     }
 }
 
-- (void) handleFlagsChanged: (NSEvent *) event {
-    [self reconcileModifierFlags: [event modifierFlags]];
+- (void) reconcileModifierFlags: (NSUInteger) flags {
+    [self reconcileModifierFlags: flags includeCommand: NO];
 }
 
 - (void) sendCopyKey {

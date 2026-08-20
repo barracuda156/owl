@@ -36,15 +36,18 @@
 - (void) sendKey: (unsigned short) keyCode isPressed: (BOOL) isPressed;
 - (void) sendModifiers: (uint32_t) modifiers;
 
-/* Translate an NSFlagsChanged event into modifier key events
- * plus a wl_keyboard.modifiers event. */
-- (void) handleFlagsChanged: (NSEvent *) event;
-
 /* Bring our idea of the modifier state in sync with the given
  * -[NSEvent modifierFlags] value. Cocoa delivers NSFlagsChanged
  * to the first responder of the key window, so we miss changes
  * that happen while the menu bar or another application has
- * focus; calling this from every event self-heals the state. */
+ * focus; calling this from every event self-heals the state.
+ *
+ * When includeCommand is YES (the focused surface holds a keyboard
+ * shortcuts inhibitor), Command is forwarded to the client as
+ * Super_L/Mod4 instead of staying compositor-private; the plain
+ * variant passes NO. */
+- (void) reconcileModifierFlags: (NSUInteger) flags
+                 includeCommand: (BOOL) includeCommand;
 - (void) reconcileModifierFlags: (NSUInteger) flags;
 
 /* Type the key bound to XF86Copy/XF86Paste in our keymap. The

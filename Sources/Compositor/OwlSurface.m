@@ -23,6 +23,7 @@
 #import "OwlWpFractionalScaleManagerV1.h"
 #import "OwlPointer.h"
 #import "OwlKeyboard.h"
+#import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
 #import "OwlServer.h"
 #import "OwlBuffer.h"
 #import "OwlSurfaceState.h"
@@ -665,6 +666,19 @@ static const struct wl_surface_interface surface_interface = {
     return [OwlKeyboard keyboardForClient: client];
 }
 
+// Whether this surface holds a keyboard shortcuts inhibitor, in
+// which case Command chords are typed into the client rather than
+// treated as compositor menu shortcuts.
+- (BOOL) shortcutsInhibited {
+    return [OwlZwpKeyboardShortcutsInhibitManagerV1
+        shortcutsInhibitedForSurfaceResource: _resource];
+}
+
+- (void) reconcileModifiersForEvent: (NSEvent *) event {
+    [[self keyboard] reconcileModifierFlags: [event modifierFlags]
+                             includeCommand: [self shortcutsInhibited]];
+}
+
 - (NSPoint) pointOfEvent: (NSEvent *) event {
     NSPoint point = [event locationInWindow];
     point = [self convertPoint: point fromView: nil];
@@ -760,7 +774,7 @@ static const struct wl_surface_interface surface_interface = {
     // The client matches its mouse bindings against the exact
     // modifier state, so make sure ours isn't stale before it
     // interprets the click.
-    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
+    [self reconcileModifiersForEvent: event];
     [self ensureMouseIsInside: event];
     _buttonsDown++;
     [[self pointer] sendButton: BTN_LEFT isPressed: YES];
@@ -775,7 +789,7 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) rightMouseDown: (NSEvent *) event {
-    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
+    [self reconcileModifiersForEvent: event];
     [self ensureMouseIsInside: event];
     _buttonsDown++;
     [[self pointer] sendButton: BTN_RIGHT isPressed: YES];
@@ -801,7 +815,7 @@ static const struct wl_surface_interface surface_interface = {
     if ([event buttonNumber] != 2) {
         return;
     }
-    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
+    [self reconcileModifiersForEvent: event];
     [self ensureMouseIsInside: event];
     _buttonsDown++;
     [[self pointer] sendButton: BTN_MIDDLE isPressed: YES];
@@ -826,7 +840,7 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 - (void) scrollWheel: (NSEvent *) event {
-    [[self keyboard] reconcileModifierFlags: [event modifierFlags]];
+    [self reconcileModifiersForEvent: event];
     [self ensureMouseIsInside: event];
     [[self pointer] sendScrollByX: [event deltaX] byY: [event deltaY]];
     [[OwlServer sharedServer] flushClientsLater];
@@ -847,8 +861,9 @@ static const struct wl_surface_interface surface_interface = {
     if (keyboard == nil) {
         return;
     }
-    [keyboard reconcileModifierFlags: [event modifierFlags]];
-    if ([event modifierFlags] & NSCommandKeyMask) {
+    [self reconcileModifiersForEvent: event];
+    if (([event modifierFlags] & NSCommandKeyMask)
+        && ![self shortcutsInhibited]) {
         // Command chords belong to the compositor (they are our
         // menu shortcuts), so don't type them into the client.
         // Cocoa would not deliver the matching keyUp anyway,
@@ -874,13 +889,30 @@ static const struct wl_surface_interface surface_interface = {
     if (keyboard == nil) {
         return;
     }
-    [keyboard reconcileModifierFlags: [event modifierFlags]];
+    [self reconcileModifiersForEvent: event];
     [keyboard sendKey: [event keyCode] isPressed: NO];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
+- (BOOL) performKeyEquivalent: (NSEvent *) event {
+    // Cocoa offers Command chords to the view hierarchy before the
+    // menu bar gets them. Normally we decline, letting our menu
+    // shortcuts work; but for a surface holding a keyboard
+    // shortcuts inhibitor, the chord is typed into the client and
+    // the menu never sees it. Only the focused surface may claim
+    // the event: performKeyEquivalent visits every view, focused
+    // or not.
+    if (![self shortcutsInhibited]
+        || [[self window] firstResponder] != self
+        || [event type] != NSKeyDown) {
+        return [super performKeyEquivalent: event];
+    }
+    [self keyDown: event];
+    return YES;
+}
+
 - (void) flagsChanged: (NSEvent *) event {
-    [[self keyboard] handleFlagsChanged: event];
+    [self reconcileModifiersForEvent: event];
     [[OwlServer sharedServer] flushClientsLater];
 }
 
