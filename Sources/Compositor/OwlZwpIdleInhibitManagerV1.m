@@ -189,6 +189,10 @@ static const struct zwp_idle_inhibitor_v1_interface idle_inhibitor_impl = {
 
 @implementation OwlZwpIdleInhibitManagerV1
 
++ (BOOL) anyInhibitorsHeld {
+    return [inhibitors count] > 0;
+}
+
 static void idle_inhibit_manager_destroy(struct wl_resource *resource) {
     OwlZwpIdleInhibitManagerV1 *self = wl_resource_get_user_data(resource);
     [self release];

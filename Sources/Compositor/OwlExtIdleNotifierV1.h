@@ -20,24 +20,26 @@
 #import <Cocoa/Cocoa.h>
 #import <wayland-server.h>
 
-
-/* Implements zwp_idle_inhibit_manager_v1.
+/* Implements ext_idle_notifier_v1.
  *
- * Owl doesn't track per-surface visibility/occlusion, so this counts
- * every live inhibitor object as active (spec: "counting mapped
- * inhibitors is close enough for v1") and holds a single system power
- * assertion for as long as that count is above zero.
+ * User idle time comes from CGEventSourceSecondsSinceLastEventType,
+ * which counts all hardware input session-wide — exactly the "no
+ * input to the seat" the protocol asks about, and it keeps working
+ * while native apps have focus. Each notification runs a one-shot
+ * NSTimer aimed at the moment its timeout would elapse, and while
+ * idled polls once a second to catch the resume. On GNUstep there
+ * is no such clock, so notifications simply never fire.
+ *
+ * Notifications created with get_idle_notification hold off while
+ * any zwp_idle_inhibitor_v1 exists; get_input_idle_notification
+ * (v2) ignores inhibitors, per the spec.
  */
-@interface OwlZwpIdleInhibitManagerV1 : NSObject <OwlGlobal> {
+@interface OwlExtIdleNotifierV1 : NSObject <OwlGlobal> {
     struct wl_resource *_resource;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource;
 
 + (void) addGlobalToDisplay: (struct wl_display *) display;
-
-/* Whether any zwp_idle_inhibitor_v1 currently exists; consulted by
- * ext-idle-notify for the notifications that obey inhibitors. */
-+ (BOOL) anyInhibitorsHeld;
 
 @end

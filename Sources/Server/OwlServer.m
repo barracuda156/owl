@@ -35,6 +35,7 @@
 #import "OwlWpFractionalScaleManagerV1.h"
 #import "OwlWpAlphaModifierV1.h"
 #import "OwlZwpIdleInhibitManagerV1.h"
+#import "OwlExtIdleNotifierV1.h"
 #import "OwlSeat.h"
 #import "OwlWpCursorShapeManagerV1.h"
 #import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
@@ -155,6 +156,7 @@
     [OwlWpFractionalScaleManagerV1 addGlobalToDisplay: _display];
     [OwlWpAlphaModifierV1 addGlobalToDisplay: _display];
     [OwlZwpIdleInhibitManagerV1 addGlobalToDisplay: _display];
+    [OwlExtIdleNotifierV1 addGlobalToDisplay: _display];
     [OwlWlDataDeviceManager addGlobalToDisplay: _display];
     [OwlZwpPrimarySelectionDeviceManagerV1 addGlobalToDisplay: _display];
     [OwlSeat addGlobalToDisplay: _display];
