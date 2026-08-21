@@ -32,6 +32,14 @@
 static void xdg_toplevel_destroy(struct wl_resource *resource) {
     OwlXdgToplevel *self = wl_resource_get_user_data(resource);
     self->_destroying = YES;
+    // The surface does not retain its role; detach ourselves so a
+    // later commit cannot message a freed object. GTK in particular
+    // destroys the xdg_toplevel on window close but keeps the
+    // wl_surface around for the next map, and its very next commit
+    // on that surface used to hit the dangling role and crash.
+    if ([self->_surface role] == (id<OwlSurfaceRole>) self) {
+        [self->_surface setRole: nil];
+    }
     [self->_window close];
     [self release];
 }

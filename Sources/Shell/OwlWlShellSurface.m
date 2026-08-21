@@ -25,6 +25,12 @@
 
 static void shell_surface_destroy(struct wl_resource *resource) {
     OwlWlShellSurface *self = wl_resource_get_user_data(resource);
+    // The surface does not retain its role; detach ourselves so a
+    // later commit cannot message a freed object (see the stable
+    // xdg_toplevel destructor).
+    if ([self->_surface role] == (id<OwlSurfaceRole>) self) {
+        [self->_surface setRole: nil];
+    }
     [self->_window close];
     [self release];
 }
