@@ -43,6 +43,15 @@ static void xdg_surface_v6_get_xdg_toplevel_handler(
     uint32_t id
 ) {
     OwlZxdgSurfaceV6 *self = wl_resource_get_user_data(resource);
+    // NULL rather than nil: the "id" parameter shadows the type.
+    if ([self->_surface role] != NULL) {
+        wl_resource_post_error(
+            resource,
+            ZXDG_SURFACE_V6_ERROR_ALREADY_CONSTRUCTED,
+            "the surface already has a role"
+        );
+        return;
+    }
     struct wl_resource *xdg_toplevel_resource = wl_resource_create(
         client,
         &zxdg_toplevel_v6_interface,

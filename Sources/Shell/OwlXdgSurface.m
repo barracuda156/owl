@@ -152,7 +152,17 @@
 
     NSWindow *parentWindow = [[_parentXdgSurface surface] window];
     if (parentWindow != nil && [_window parentWindow] == nil) {
-        [parentWindow addChildWindow: _window ordered: NSWindowAbove];
+        // Refuse to create a child-window cycle: a buggy or
+        // hostile client can chain popups into a loop (popup A
+        // parented on popup B and vice versa), and AppKit would
+        // not survive the attachment.
+        NSWindow *ancestor = parentWindow;
+        while (ancestor != nil && ancestor != _window) {
+            ancestor = [ancestor parentWindow];
+        }
+        if (ancestor == nil) {
+            [parentWindow addChildWindow: _window ordered: NSWindowAbove];
+        }
     }
     [_window makeFirstResponder: surface];
     if (_wantsGrab) {
@@ -166,6 +176,11 @@
     if (_window == nil) {
         return;
     }
+    // If the cursor is inside the popup, its view will get no
+    // -mouseExited: for the window going away; hand the pointer
+    // focus back explicitly, or the client is left with a focus
+    // pointing at a gone surface and drops all further motion.
+    [OwlSurface relinquishPointerFocusOf: [_xdgSurface surface]];
     NSWindow *parentWindow = [_window parentWindow];
     BOOL wasKey = [_window isKeyWindow];
     [parentWindow removeChildWindow: _window];
@@ -195,9 +210,40 @@
     [[self dataDevice] unfocused];
     [[self primaryDataDevice] unfocused];
     [[OwlServer sharedServer] flushClientsLater];
+    if (_wantsGrab) {
+        // The new key window is not knowable yet (Cocoa resigns
+        // the old key window before appointing the new one), so
+        // check whether the grab actually broke on the next run
+        // loop pass.
+        [self performSelector: @selector(checkGrabBroken)
+                   withObject: nil
+                   afterDelay: 0.0];
+    }
+}
+
+// A grabbing popup whose key status went anywhere other than one
+// of its own descendant popups has lost the grab; the protocol
+// wants popup_done then, so that e.g. a click landing on another
+// application still dismisses the menu.
+- (void) checkGrabBroken {
+    if (_destroying || _window == nil || ![_window isVisible]) {
+        return;
+    }
+    NSWindow *w = [NSApp keyWindow];
+    while (w != nil && w != _window) {
+        w = [w parentWindow];
+    }
+    if (w == _window) {
+        // The key status is on ourselves or on a descendant
+        // popup (a submenu); the grab holds.
+        return;
+    }
+    xdg_popup_send_popup_done(_resource);
+    [[OwlServer sharedServer] flushClientsLater];
 }
 
 - (void) teardown {
+    [NSObject cancelPreviousPerformRequestsWithTarget: self];
     OwlSurface *surface = [_xdgSurface surface];
     if ([surface role] == (id<OwlSurfaceRole>) self) {
         [surface setRole: nil];
@@ -315,6 +361,15 @@ static void xdg_surface_get_xdg_toplevel_handler(
     uint32_t id
 ) {
     OwlXdgSurface *self = wl_resource_get_user_data(resource);
+    // NULL rather than nil: the "id" parameter shadows the type.
+    if ([self->_surface role] != NULL) {
+        wl_resource_post_error(
+            resource,
+            XDG_SURFACE_ERROR_ALREADY_CONSTRUCTED,
+            "the surface already has a role"
+        );
+        return;
+    }
     struct wl_resource *xdg_toplevel_resource = wl_resource_create(
         client,
         &xdg_toplevel_interface,
@@ -355,6 +410,14 @@ static void xdg_surface_get_popup_handler(
             resource,
             XDG_SURFACE_ERROR_ALREADY_CONSTRUCTED,
             "the surface already has a role"
+        );
+        return;
+    }
+    if (parentXdgSurface == self) {
+        wl_resource_post_error(
+            resource,
+            XDG_WM_BASE_ERROR_INVALID_POPUP_PARENT,
+            "a popup cannot be its own parent"
         );
         return;
     }

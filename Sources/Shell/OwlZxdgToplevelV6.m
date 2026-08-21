@@ -38,6 +38,9 @@ static void xdg_toplevel_v6_destroy(struct wl_resource *resource) {
     if ([self->_surface role] == (id<OwlSurfaceRole>) self) {
         [self->_surface setRole: nil];
     }
+    // No -mouseExited: is coming for the window being closed; if
+    // the cursor was inside, hand the pointer focus back cleanly.
+    [OwlSurface relinquishPointerFocusOf: self->_surface];
     [self->_window close];
     [self release];
 }

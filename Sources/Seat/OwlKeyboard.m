@@ -514,6 +514,12 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
 }
 
 - (void) sendEnterSurface: (OwlSurface *) surface {
+    if ([surface resource] == NULL) {
+        // The surface object outlived its resource (a misbehaving
+        // client destroyed the wl_surface while its role was still
+        // alive); there is nothing to reference in the event.
+        return;
+    }
     uint32_t serial = [[OwlServer sharedServer] nextSerial];
     struct wl_array keys;
     wl_array_init(&keys);
@@ -546,6 +552,10 @@ static uint32_t MacosToXkbKeycode(unsigned short macCode) {
 }
 
 - (void) sendLeaveSurface: (OwlSurface *) surface {
+    if ([surface resource] == NULL) {
+        // See -sendEnterSurface:.
+        return;
+    }
     uint32_t serial = [[OwlServer sharedServer] nextSerial];
     wl_keyboard_send_leave(_resource, serial, [surface resource]);
 

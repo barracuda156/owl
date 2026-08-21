@@ -154,4 +154,12 @@
  * holds the pointer focus of its client). */
 - (BOOL) mouseIsInside;
 
+/* If the given surface holds the global pointer focus, send it a
+ * pointer leave and clear the focus, so that the surface now under
+ * the cursor re-enters on its next event. No-op for any other
+ * surface. Roles call this when their window goes away while the
+ * cursor is (or may be) inside it — Cocoa delivers no -mouseExited:
+ * for that. */
++ (void) relinquishPointerFocusOf: (OwlSurface *) surface;
+
 @end

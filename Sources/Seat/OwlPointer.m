@@ -233,6 +233,12 @@ static void pointer_destroy(struct wl_resource *resource) {
 }
 
 - (void) sendEnterSurface: (OwlSurface *) surface atPoint: (NSPoint) point {
+    if ([surface resource] == NULL) {
+        // The surface object outlived its resource (a misbehaving
+        // client destroyed the wl_surface while its role was still
+        // alive); there is nothing to reference in the event.
+        return;
+    }
     wl_pointer_send_enter(
         _resource,
         [[OwlServer sharedServer] nextSerial],
@@ -287,6 +293,10 @@ static void pointer_destroy(struct wl_resource *resource) {
 }
 
 - (void) sendLeaveSurface: (OwlSurface *) surface {
+    if ([surface resource] == NULL) {
+        // See -sendEnterSurface:atPoint:.
+        return;
+    }
     wl_pointer_send_leave(
         _resource,
         [[OwlServer sharedServer] nextSerial],

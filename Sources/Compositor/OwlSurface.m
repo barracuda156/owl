@@ -41,6 +41,17 @@
 
 @implementation OwlSurface
 
+// The one surface that currently holds the wl_pointer focus, if
+// any. There is a single physical mouse, but the enter/leave
+// bookkeeping is otherwise per-view, and Cocoa tracking rects
+// ignore window occlusion: when a popup window opens over the
+// cursor, the surface underneath never gets a -mouseExited:.
+// Tracking the focus globally lets an enter on one surface
+// deliver the missing leave on the previous one, and lets a
+// dying popup hand the focus back cleanly. Unretained; cleared
+// whenever the surface loses the focus or is destroyed.
+static OwlSurface *pointer_focus_surface;
+
 - (struct wl_resource *) resource {
     return _resource;
 }
@@ -63,6 +74,13 @@ static void surface_destroy(struct wl_resource *resource) {
              in [self->_pendingState presentationFeedbacks]) {
         [feedback sendDiscarded];
     }
+    if (pointer_focus_surface == self) {
+        // Too late to send a leave; just don't keep dangling.
+        pointer_focus_surface = nil;
+    }
+    // The object can outlive the resource (roles retain it); the
+    // event senders check for this and skip dead surfaces.
+    self->_resource = NULL;
     [self removeFromSuperview];
     [self release];
 }
@@ -715,6 +733,19 @@ static const struct wl_surface_interface surface_interface = {
     return point;
 }
 
++ (void) relinquishPointerFocusOf: (OwlSurface *) surface {
+    if (surface == nil || pointer_focus_surface != surface) {
+        return;
+    }
+    pointer_focus_surface = nil;
+    if (surface->_mouseIsInside) {
+        surface->_mouseIsInside = NO;
+        surface->_exitedDuringDrag = NO;
+        [[surface pointer] sendLeaveSurface: surface];
+        [[OwlServer sharedServer] flushClientsLater];
+    }
+}
+
 - (void) mouseEntered: (NSEvent *) event {
     _exitedDuringDrag = NO;
     [[self window] setAcceptsMouseMovedEvents: YES];
@@ -725,6 +756,17 @@ static const struct wl_surface_interface surface_interface = {
         // whatever surface is underneath.
         return;
     }
+    if (pointer_focus_surface != nil && pointer_focus_surface != self) {
+        if (pointer_focus_surface->_buttonsDown > 0) {
+            // The focused surface holds an implicit grab; the
+            // focus must not move until the buttons are released
+            // (this is also what keeps a menu opened on mouse-down
+            // receiving the drag that opened it).
+            return;
+        }
+        [OwlSurface relinquishPointerFocusOf: pointer_focus_surface];
+    }
+    pointer_focus_surface = self;
     if (!_mouseIsInside) {
         [[self pointer] sendEnterSurface: self atPoint: point];
         _mouseIsInside = YES;
@@ -854,6 +896,9 @@ static const struct wl_surface_interface surface_interface = {
         return;
     }
     _mouseIsInside = NO;
+    if (pointer_focus_surface == self) {
+        pointer_focus_surface = nil;
+    }
     [[self window] setAcceptsMouseMovedEvents: NO];
     [[self pointer] sendLeaveSurface: self];
     [[OwlServer sharedServer] flushClientsLater];
