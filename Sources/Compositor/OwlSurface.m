@@ -955,6 +955,15 @@ static const struct wl_surface_interface surface_interface = {
     return YES;
 }
 
+// A click on an inactive owl window should not just activate it,
+// but also reach the client, the way clicks reach surfaces on any
+// other Wayland compositor. In particular, while a popup holds the
+// key status, a click back in the main window must get through for
+// the client's grab logic to dismiss the popup.
+- (BOOL) acceptsFirstMouse: (NSEvent *) event {
+    return YES;
+}
+
 - (void) viewDidMoveToWindow {
     // The backing scale of a surface is only really known once its
     // view ends up in a window; let fractional-scale re-check.

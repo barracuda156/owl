@@ -20,22 +20,41 @@
 #import "OwlSurface.h"
 #import "OwlXdgToplevel.h"
 #import "OwlXdgPositioner.h"
+#import "OwlPopupWindow.h"
+#import "OwlServer.h"
+#import "OwlKeyboard.h"
+#import "OwlWlDataDevice.h"
+#import "OwlZwpPrimarySelectionDeviceV1.h"
 #import "xdg-shell.h"
 #import <wayland-server.h>
 
 
-/* A real, non-stub xdg_popup. Owl has no separate popup window
- * surface of its own (popups are drawn by the client into their own
- * wl_surface and owl has no on-screen placement for them beyond the
- * geometry math below), so grab is accepted but does not establish
- * an actual input grab; reposition recomputes geometry from the new
- * positioner and sends the full repositioned/configure/xdg_surface.configure
- * sequence the protocol requires. */
-@interface OwlXdgPopup : NSObject {
+/* A real xdg_popup. The popup surface is hosted in a borderless
+ * OwlPopupWindow, attached to the parent surface's window as a
+ * child window and placed at the position computed from the
+ * xdg_positioner. The grab request is accepted but not enforced
+ * compositor-side beyond making the popup window key, which moves
+ * the keyboard focus to the popup the way a grab is supposed to;
+ * clients like GTK also keep their own client-side grab, which
+ * dismisses the popup when a click lands elsewhere in the
+ * application. reposition recomputes geometry from the new
+ * positioner and sends the full repositioned/configure/
+ * xdg_surface.configure sequence the protocol requires. */
+@interface OwlXdgPopup : NSObject <OwlSurfaceRole, NSWindowDelegate> {
 @public
     struct wl_resource *_resource;
     OwlXdgSurface *_xdgSurface;
     OwlXdgSurface *_parentXdgSurface;
+    OwlPopupWindow *_window;
+    // The position last sent in xdg_popup.configure, relative to
+    // the parent's window geometry origin, y growing downward.
+    NSPoint _position;
+    // Whether the client called xdg_popup.grab (always before the
+    // popup maps). Only a grabbing popup (a menu) takes the key
+    // status; a grabless one (a tooltip) must not steal the
+    // keyboard focus from the window under it.
+    BOOL _wantsGrab;
+    BOOL _destroying;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource
@@ -48,8 +67,24 @@
 
 @implementation OwlXdgPopup
 
+- (OwlKeyboard *) keyboard {
+    struct wl_client *client = wl_resource_get_client(_resource);
+    return [OwlKeyboard keyboardForClient: client];
+}
+
+- (OwlWlDataDevice *) dataDevice {
+    struct wl_client *client = wl_resource_get_client(_resource);
+    return [OwlWlDataDevice dataDeviceForClient: client];
+}
+
+- (OwlZwpPrimarySelectionDeviceV1 *) primaryDataDevice {
+    struct wl_client *client = wl_resource_get_client(_resource);
+    return [OwlZwpPrimarySelectionDeviceV1 deviceForClient: client];
+}
+
 - (void) sendConfigureForPositioner: (OwlXdgPositioner *) positioner {
     NSRect geometry = [positioner geometryRelativeToParent];
+    _position = geometry.origin;
 
     // Wayland's y grows downward from the parent's window geometry
     // origin; our geometry math above works in the same convention
@@ -64,8 +99,133 @@
     [_xdgSurface sendConfigure];
 }
 
+// Compute and apply the popup's size and on-screen position from
+// the configured position and the current window geometries.
+- (void) updatePlacement {
+    OwlSurface *surface = [_xdgSurface surface];
+    NSRect geometry = [surface windowGeometry];
+
+    [_window setContentSize: geometry.size];
+
+    // Clip the popup's window-geometry margins (CSD menu shadows)
+    // the same way toplevel windows do.
+    NSPoint viewOrigin;
+    viewOrigin.x = -geometry.origin.x;
+    viewOrigin.y = geometry.origin.y + geometry.size.height
+        - [surface frame].size.height;
+    if (!NSEqualPoints([surface frame].origin, viewOrigin)) {
+        [surface setFrameOrigin: viewOrigin];
+        [surface updateTrackingRect];
+    }
+
+    OwlSurface *parentSurface = [_parentXdgSurface surface];
+    NSWindow *parentWindow = [parentSurface window];
+    if (parentWindow == nil) {
+        return;
+    }
+
+    // The configured position is relative to the parent's window
+    // geometry origin, y growing downward. Converting through the
+    // parent's view takes care of any offset that view itself has
+    // (both its geometry clipping and the parent being a popup
+    // in its own right).
+    NSRect parentGeometry = [parentSurface windowGeometry];
+    NSPoint inParentView;
+    inParentView.x = parentGeometry.origin.x + _position.x;
+    inParentView.y = [parentSurface bounds].size.height
+        - (parentGeometry.origin.y + _position.y);
+    NSPoint inWindow = [parentSurface convertPoint: inParentView
+                                            toView: nil];
+    NSPoint onScreen = [parentWindow convertBaseToScreen: inWindow];
+    [_window setFrameTopLeftPoint: onScreen];
+}
+
+- (void) map {
+    OwlSurface *surface = [_xdgSurface surface];
+    if (_window == nil) {
+        _window = [[OwlPopupWindow alloc]
+            initWithContentRect: NSMakeRect(0, 0, 1, 1)];
+        [[_window contentView] addSubview: surface];
+        [_window setDelegate: self];
+    }
+    [self updatePlacement];
+
+    NSWindow *parentWindow = [[_parentXdgSurface surface] window];
+    if (parentWindow != nil && [_window parentWindow] == nil) {
+        [parentWindow addChildWindow: _window ordered: NSWindowAbove];
+    }
+    [_window makeFirstResponder: surface];
+    if (_wantsGrab) {
+        [_window makeKeyAndOrderFront: nil];
+    } else {
+        [_window orderFront: nil];
+    }
+}
+
+- (void) unmap {
+    if (_window == nil) {
+        return;
+    }
+    NSWindow *parentWindow = [_window parentWindow];
+    BOOL wasKey = [_window isKeyWindow];
+    [parentWindow removeChildWindow: _window];
+    [_window orderOut: nil];
+    // Hand the key status back to the parent, so the toplevel
+    // regains the keyboard focus when a menu closes.
+    if (wasKey && parentWindow != nil) {
+        [parentWindow makeKeyWindow];
+    }
+}
+
+- (void) update {
+    [self updatePlacement];
+}
+
+- (void) windowDidBecomeKey: (NSNotification *) notification {
+    if (_destroying) return;
+    [[self keyboard] sendEnterSurface: [_xdgSurface surface]];
+    [[self dataDevice] focused];
+    [[self primaryDataDevice] focused];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (void) windowDidResignKey: (NSNotification *) notification {
+    if (_destroying) return;
+    [[self keyboard] sendLeaveSurface: [_xdgSurface surface]];
+    [[self dataDevice] unfocused];
+    [[self primaryDataDevice] unfocused];
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
+- (void) teardown {
+    OwlSurface *surface = [_xdgSurface surface];
+    if ([surface role] == (id<OwlSurfaceRole>) self) {
+        [surface setRole: nil];
+    }
+    if (_window == nil) {
+        return;
+    }
+    // The delegate is detached below, so windowDidResignKey won't
+    // run for the orderOut; send the keyboard leave ourselves
+    // before the parent takes the key status back.
+    if ([_window isKeyWindow]) {
+        [[self keyboard] sendLeaveSurface: surface];
+        [[self dataDevice] unfocused];
+        [[self primaryDataDevice] unfocused];
+        [[OwlServer sharedServer] flushClientsLater];
+    }
+    [_window setDelegate: nil];
+    [self unmap];
+    [surface removeFromSuperview];
+    [_window close];
+    [_window release];
+    _window = nil;
+}
+
 static void xdg_popup_destroy_resource(struct wl_resource *resource) {
     OwlXdgPopup *self = wl_resource_get_user_data(resource);
+    self->_destroying = YES;
+    [self teardown];
     [self release];
 }
 
@@ -79,9 +239,13 @@ static void xdg_popup_grab_handler(
     struct wl_resource *seat_resource,
     uint32_t serial
 ) {
-    // No explicit popup grab support; the request is accepted so
-    // well-behaved clients (which always call this after get_popup)
-    // don't see a protocol error, but no grab is actually taken.
+    // No compositor-side input grab is taken; the popup window
+    // becoming key on map already gives the popup the keyboard
+    // focus, and the client's own grab logic handles dismissal.
+    // The protocol requires grab to be issued before the popup is
+    // mapped, so recording the wish here is early enough.
+    OwlXdgPopup *self = wl_resource_get_user_data(resource);
+    self->_wantsGrab = YES;
 }
 
 static void xdg_popup_reposition_handler(
@@ -95,6 +259,9 @@ static void xdg_popup_reposition_handler(
 
     xdg_popup_send_repositioned(resource, token);
     [self sendConfigureForPositioner: positioner];
+    if (self->_window != nil) {
+        [self updatePlacement];
+    }
 }
 
 static const struct xdg_popup_interface xdg_popup_impl = {
@@ -183,6 +350,15 @@ static void xdg_surface_get_popup_handler(
         : NULL;
     OwlXdgPositioner *positioner = wl_resource_get_user_data(positioner_resource);
 
+    if ([self->_surface role] != NULL) {
+        wl_resource_post_error(
+            resource,
+            XDG_SURFACE_ERROR_ALREADY_CONSTRUCTED,
+            "the surface already has a role"
+        );
+        return;
+    }
+
     struct wl_resource *popup_resource = wl_resource_create(
         client,
         &xdg_popup_interface,
@@ -193,6 +369,7 @@ static void xdg_surface_get_popup_handler(
     popup = [popup initWithResource: popup_resource
                           xdgSurface: self
                     parentXdgSurface: parentXdgSurface];
+    [self->_surface setRole: popup];
     [popup sendConfigureForPositioner: positioner];
     [popup release];
 }
