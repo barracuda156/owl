@@ -746,13 +746,26 @@ static const struct wl_surface_interface surface_interface = {
 }
 
 + (void) relinquishPointerFocusOf: (OwlSurface *) surface {
-    if (surface == nil || pointer_focus_surface != surface) {
+    if (surface == nil) {
+        return;
+    }
+    // Every caller of this method is a teardown path: the view is
+    // leaving its window, so Cocoa will never deliver the mouseUp
+    // (or mouseExited) for anything it saw earlier. Reset the
+    // implicit-grab bookkeeping unconditionally — clients like GTK
+    // reuse the wl_surface for their next popup, and a stale
+    // buttons-down count on the reused object would pin the global
+    // pointer focus forever, silently swallowing every enter/leave/
+    // motion for the rest of the session.
+    surface->_buttonsDown = 0;
+    surface->_exitedDuringDrag = NO;
+    BOOL wasInside = surface->_mouseIsInside;
+    surface->_mouseIsInside = NO;
+    if (pointer_focus_surface != surface) {
         return;
     }
     pointer_focus_surface = nil;
-    if (surface->_mouseIsInside) {
-        surface->_mouseIsInside = NO;
-        surface->_exitedDuringDrag = NO;
+    if (wasInside) {
         [[surface pointer] sendLeaveSurface: surface];
         [[OwlServer sharedServer] flushClientsLater];
     }

@@ -17,7 +17,26 @@
  */
 
 #import "OwlWindow.h"
+#import "OwlFeatures.h"
 #import <Cocoa/Cocoa.h>
+
+// Whether the left mouse button is physically held down right now.
+// Interactive move/resize run a nested event loop that only a
+// left-mouse-up terminates, but they are started by a client
+// request that can arrive after the button was already released
+// (or from a confused client). Entering the loop then would freeze
+// the compositor until the next unrelated click; check the real
+// button state instead of trusting the request.
+static BOOL left_mouse_button_is_down(void) {
+#if defined(OWL_PLATFORM_APPLE) && MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+    if ([NSEvent respondsToSelector: @selector(pressedMouseButtons)]) {
+        return ([NSEvent pressedMouseButtons] & 1) != 0;
+    }
+#endif
+    // 10.5 / GNUstep: no global button-state query available;
+    // assume the client is telling the truth.
+    return YES;
+}
 
 @implementation OwlWindow
 
@@ -90,16 +109,29 @@
 }
 
 - (void) runInteractiveMove {
+    if (!left_mouse_button_is_down()) {
+        return;
+    }
     NSPoint originalMouseLocation = [NSEvent mouseLocation];
     NSPoint originalOrigin = [self frame].origin;
     NSEventMask mask = NSLeftMouseUpMask | NSMouseMovedMask | NSLeftMouseDraggedMask;
 
     while (YES) {
+        // A finite timeout so the loop can double-check the button
+        // state: the mouse-up can be lost to us (delivered to a
+        // window that went away, swallowed by the system), and
+        // waiting forever would freeze the compositor.
         NSEvent *event = [NSApp nextEventMatchingMask: mask
-                                            untilDate: [NSDate distantFuture]
+                                            untilDate: [NSDate dateWithTimeIntervalSinceNow: 0.25]
                                                inMode: NSEventTrackingRunLoopMode
                                               dequeue: YES];
 
+        if (event == nil) {
+            if (!left_mouse_button_is_down()) {
+                break;
+            }
+            continue;
+        }
         if ([event type] == NSLeftMouseUp) {
             break;
         }
@@ -124,6 +156,9 @@
 #define RESIZE_EDGE_RIGHT  8
 
 - (void) runInteractiveResizeWithEdges: (uint32_t) edges {
+    if (!left_mouse_button_is_down()) {
+        return;
+    }
     NSPoint originalMouseLocation = [NSEvent mouseLocation];
     NSRect originalFrame = [self frame];
     NSEventMask mask = NSLeftMouseUpMask | NSMouseMovedMask | NSLeftMouseDraggedMask;
@@ -138,11 +173,20 @@
     CGFloat minHeight = 100.0;
 
     while (YES) {
+        // Finite timeout for the same reason as in
+        // -runInteractiveMove: never wait forever on a mouse-up
+        // that may already be gone.
         NSEvent *event = [NSApp nextEventMatchingMask: mask
-                                            untilDate: [NSDate distantFuture]
+                                            untilDate: [NSDate dateWithTimeIntervalSinceNow: 0.25]
                                                inMode: NSEventTrackingRunLoopMode
                                               dequeue: YES];
 
+        if (event == nil) {
+            if (!left_mouse_button_is_down()) {
+                break;
+            }
+            continue;
+        }
         if ([event type] == NSLeftMouseUp) {
             break;
         }
