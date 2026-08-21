@@ -59,6 +59,14 @@
     NSUInteger _buttonsDown;
     BOOL _exitedDuringDrag;
 
+    // The view size at the time of the last window-shadow
+    // invalidation. The shadow shape only depends on the surface
+    // extents, so recomputing it on every -drawRect: is wasted
+    // work; on 10.6/PPC the WindowServer's alpha-scan of a large
+    // transparent window per frame is expensive enough to stall
+    // the whole compositor during menu interaction.
+    NSSize _lastShadowInvalidationSize;
+
     // Callbacks to be sent when we draw a frame.
     // These are first collected as a part of a pending
     // state, and added to this array on a commit. Once

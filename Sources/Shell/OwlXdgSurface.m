@@ -105,7 +105,15 @@
     OwlSurface *surface = [_xdgSurface surface];
     NSRect geometry = [surface windowGeometry];
 
-    [_window setContentSize: geometry.size];
+    // This runs on every commit of the popup surface, which for a
+    // hovered GTK menu means pointer-motion rate; only touch the
+    // window when something actually changed, or the WindowServer
+    // gets a resize/move transaction (with a shadow recompute for
+    // this transparent window) per repaint.
+    if (!NSEqualSizes([_window frame].size, geometry.size)) {
+        // Borderless window: the frame is the content area.
+        [_window setContentSize: geometry.size];
+    }
 
     // Clip the popup's window-geometry margins (CSD menu shadows)
     // the same way toplevel windows do.
@@ -137,7 +145,16 @@
     NSPoint inWindow = [parentSurface convertPoint: inParentView
                                             toView: nil];
     NSPoint onScreen = [parentWindow convertBaseToScreen: inWindow];
-    [_window setFrameTopLeftPoint: onScreen];
+    // Read the frame after the possible resize above; the top-left
+    // point depends on the height.
+    NSRect frame = [_window frame];
+    NSPoint currentTopLeft = NSMakePoint(
+        frame.origin.x,
+        frame.origin.y + frame.size.height
+    );
+    if (!NSEqualPoints(currentTopLeft, onScreen)) {
+        [_window setFrameTopLeftPoint: onScreen];
+    }
 }
 
 - (void) map {

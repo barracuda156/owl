@@ -85,6 +85,15 @@
 
 - (void) setContentSize: (NSSize) size {
     _size = size;
+    if (_window != nil
+        && NSEqualSizes(
+               [_window contentRectForFrameRect: [_window frame]].size,
+               size)) {
+        // Called on every surface commit; don't bother the
+        // WindowServer (or trip -windowDidResize:) when the size
+        // hasn't actually changed.
+        return;
+    }
     [_window setContentSize: _size];
 }
 

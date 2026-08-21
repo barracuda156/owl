@@ -553,7 +553,19 @@ static void surface_commit_handler(
     [self fireCallbacks];
     [self firePresentationFeedbacksPresented];
 
-    [[self window] invalidateShadow];
+    // The window shadow is shaped by the window's alpha channel,
+    // which the WindowServer re-derives from the window contents on
+    // -invalidateShadow — an expensive readback for the large
+    // transparent windows owl uses. The shape only changes when the
+    // surface extents do (the content within stays a filled rect),
+    // so skip the invalidation for same-size repaints; without this,
+    // every damage commit of every surface recomputed the shadow,
+    // which on 10.6/PPC stalls the compositor for seconds during
+    // GTK menu interaction (menus repaint at pointer-motion rate).
+    if (!NSEqualSizes(_lastShadowInvalidationSize, [self bounds].size)) {
+        _lastShadowInvalidationSize = [self bounds].size;
+        [[self window] invalidateShadow];
+    }
 }
 
 static void surface_set_opaque_region_handler(
