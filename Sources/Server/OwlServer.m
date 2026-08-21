@@ -28,6 +28,7 @@
 #import "OwlXdgSystemBellV1.h"
 #import "OwlXdgToplevelIconManagerV1.h"
 #import "OwlZxdgDecorationManagerV1.h"
+#import "OwlOrgKdeKwinServerDecorationManager.h"
 #import "OwlWpContentTypeManagerV1.h"
 #import "OwlWpSinglePixelBufferManagerV1.h"
 #import "OwlWpPresentation.h"
@@ -149,6 +150,7 @@
     [OwlXdgSystemBellV1 addGlobalToDisplay: _display];
     [OwlXdgToplevelIconManagerV1 addGlobalToDisplay: _display];
     [OwlZxdgDecorationManagerV1 addGlobalToDisplay: _display];
+    [OwlOrgKdeKwinServerDecorationManager addGlobalToDisplay: _display];
     [OwlWpContentTypeManagerV1 addGlobalToDisplay: _display];
     [OwlWpSinglePixelBufferManagerV1 addGlobalToDisplay: _display];
     [OwlWpPresentation addGlobalToDisplay: _display];
