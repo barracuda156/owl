@@ -30,8 +30,6 @@
 
 - (void) sendConfigure;
 
-- (NSSize) geometrySizeForBufferSize: (NSSize) size;
-
 - (OwlSurface *) surface;
 
 @end

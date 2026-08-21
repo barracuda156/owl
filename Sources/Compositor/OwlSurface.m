@@ -121,21 +121,16 @@ static void surface_damage_buffer_handler(
     if (geometry.size.width == 0) {
         return [self bounds];
     }
-    return geometry;
-}
-
-- (NSSize) geometrySizeAdjustements {
-    NSSize currentSize = [_currentState geometry].size;
-    if (currentSize.width == 0) {
-        return NSZeroSize;
+    // The protocol requires the effective geometry to be clamped
+    // to the surface extents; without this, a client could make us
+    // size its window to a rect its buffer cannot fill. Only the
+    // extents matter for the intersection, so the differing y
+    // directions of the two rects are harmless here.
+    geometry = NSIntersectionRect(geometry, [self bounds]);
+    if (NSIsEmptyRect(geometry)) {
+        return [self bounds];
     }
-
-    NSSize res;
-
-    res.width = [self frame].size.width - currentSize.width;
-    res.height = [self frame].size.height - currentSize.height;
-
-    return res;
+    return geometry;
 }
 
 - (void) setUpGL {

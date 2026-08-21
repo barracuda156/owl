@@ -323,7 +323,25 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
 }
 
 - (void) update {
-    [_window setContentSize: [_surface bounds].size];
+    // Size the window to the client's window geometry, not the
+    // full buffer: CSD clients (GTK) draw drop shadows around the
+    // actual window content and tell us via set_window_geometry
+    // which part is the window. Offset the surface view inside the
+    // content view so the geometry rect lands exactly in it; the
+    // shadow margins around it are clipped away.
+    NSRect geometry = [_surface windowGeometry];
+    [_window setContentSize: geometry.size];
+
+    NSPoint origin;
+    origin.x = -geometry.origin.x;
+    // geometry.origin.y is measured from the surface's top edge
+    // downward; Cocoa view origins are bottom-left.
+    origin.y = geometry.origin.y + geometry.size.height
+        - [_surface frame].size.height;
+    if (!NSEqualPoints([_surface frame].origin, origin)) {
+        [_surface setFrameOrigin: origin];
+        [_surface updateTrackingRect];
+    }
 }
 
 - (void) windowDidResize: (NSNotification *) notification {
@@ -331,8 +349,10 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     NSWindow *w = [notification object];
     _maximized = NO; // [w isZoomed];
     NSRect frame = [w frame];
+    // The content area shows exactly the window geometry, and the
+    // size in a configure event is in window-geometry coordinates,
+    // so the content size can be sent as is.
     NSSize s = [w contentRectForFrameRect: frame].size;
-    s = [_xdgSurface geometrySizeForBufferSize: s];
     [self sendConfigureWithSize: s];
 }
 

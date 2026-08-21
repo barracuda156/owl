@@ -30,6 +30,4 @@
 
 - (void) sendConfigure;
 
-- (NSSize) geometrySizeForBufferSize: (NSSize) size;
-
 @end

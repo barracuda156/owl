@@ -146,11 +146,4 @@ static const struct zxdg_surface_v6_interface xdg_surface_v6_impl = {
     zxdg_surface_v6_send_configure(_resource, serial);
 }
 
-- (NSSize) geometrySizeForBufferSize: (NSSize) size {
-    NSSize adj = [_surface geometrySizeAdjustements];
-    size.width -= adj.width;
-    size.height -= adj.height;
-    return size;
-}
-
 @end

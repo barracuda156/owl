@@ -100,12 +100,18 @@
 
 - (void) setPendingGeometry: (NSRect) geometry;
 
-- (NSSize) geometrySizeAdjustements;
-
-// The current window geometry, in surface-local coordinates. Falls
-// back to the surface's own bounds if set_window_geometry was never
-// called (i.e. no explicit geometry was negotiated yet).
+// The current window geometry, in surface-local coordinates
+// (y down from the top-left corner), clamped to the surface
+// extents. Falls back to the surface's own bounds if
+// set_window_geometry was never called (i.e. no explicit geometry
+// was negotiated yet).
 - (NSRect) windowGeometry;
+
+// Reinstall the mouse tracking rectangle. The rect is registered
+// with the window in window coordinates, so this must be called
+// whenever the view is moved or resized within its window (the
+// surface roles move the view around to clip CSD shadow margins).
+- (void) updateTrackingRect;
 
 /* Returns an NSImage of the current buffer content (for cursor use) */
 - (NSImage *) createCursorImage;

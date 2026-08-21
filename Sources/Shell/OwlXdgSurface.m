@@ -244,13 +244,6 @@ static const struct xdg_surface_interface xdg_surface_impl = {
     xdg_surface_send_configure(_resource, serial);
 }
 
-- (NSSize) geometrySizeForBufferSize: (NSSize) size {
-    NSSize adj = [_surface geometrySizeAdjustements];
-    size.width -= adj.width;
-    size.height -= adj.height;
-    return size;
-}
-
 - (OwlSurface *) surface {
     return _surface;
 }
