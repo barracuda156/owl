@@ -63,6 +63,14 @@
 
 - (void) sendConfigureForPositioner: (OwlXdgPositioner *) positioner;
 
+// The screen point O corresponding to the parent's window-geometry
+// origin (its Wayland (0,0), a top-left in Cocoa y-up terms), and
+// the parent window's NSScreen. Returns NO (leaving both out
+// params untouched) if the parent has no window yet, in which case
+// callers should skip constraint adjustment / on-screen placement
+// entirely, same as before this existed.
+- (BOOL) parentOrigin: (NSPoint *) outOrigin screen: (NSScreen **) outScreen;
+
 @end
 
 @implementation OwlXdgPopup
@@ -82,8 +90,56 @@
     return [OwlZwpPrimarySelectionDeviceV1 deviceForClient: client];
 }
 
+- (BOOL) parentOrigin: (NSPoint *) outOrigin screen: (NSScreen **) outScreen {
+    OwlSurface *parentSurface = [_parentXdgSurface surface];
+    NSWindow *parentWindow = [parentSurface window];
+    if (parentWindow == nil) {
+        return NO;
+    }
+    NSRect parentGeometry = [parentSurface windowGeometry];
+    NSPoint inParentView = NSMakePoint(
+        parentGeometry.origin.x,
+        [parentSurface bounds].size.height - parentGeometry.origin.y
+    );
+    NSPoint inWindow = [parentSurface convertPoint: inParentView
+                                             toView: nil];
+    *outOrigin = [parentWindow convertBaseToScreen: inWindow];
+    if (outScreen != NULL) {
+        *outScreen = [parentWindow screen];
+    }
+    return YES;
+}
+
 - (void) sendConfigureForPositioner: (OwlXdgPositioner *) positioner {
-    NSRect geometry = [positioner geometryRelativeToParent];
+    NSRect geometry;
+    NSPoint origin;
+    NSScreen *screen;
+    if ([self parentOrigin: &origin screen: &screen] && screen != nil) {
+        // Bring the screen's visible area (excludes the menu bar
+        // and Dock -- deliberate, so a menu doesn't slide under
+        // them) into the same parent-window-geometry-relative,
+        // y-down space -[OwlXdgPositioner geometryRelativeToParent]
+        // works in. Worked example: screen 1440x900 at (0,0), 25px
+        // menu bar (visibleFrame (0,0,1440,875)), origin (100,800)
+        // -> box x in [-100,1340], y in [-75,800]. A popup at
+        // (10,780,200x100) has bottom edge 880 > 800: constrained
+        // on y by 80; FLIP_Y with anchor/gravity BOTTOM->TOP puts
+        // it above the anchor; if that still doesn't fit, SLIDE
+        // moves it up 80 to y = 700.
+        NSRect visibleFrame = [screen visibleFrame];
+        NSRect box = NSMakeRect(
+            NSMinX(visibleFrame) - origin.x,
+            origin.y - NSMaxY(visibleFrame),
+            NSWidth(visibleFrame),
+            NSHeight(visibleFrame)
+        );
+        geometry = [positioner geometryRelativeToParentConstrainedTo: box];
+    } else {
+        // No parent window (or, on GNUstep, no NSScreen) to
+        // constrain against yet; send the unadjusted position, as
+        // owl always did before this existed.
+        geometry = [positioner geometryRelativeToParent];
+    }
     _position = geometry.origin;
 
     // Wayland's y grows downward from the parent's window geometry
@@ -126,25 +182,20 @@
         [surface updateTrackingRect];
     }
 
-    OwlSurface *parentSurface = [_parentXdgSurface surface];
-    NSWindow *parentWindow = [parentSurface window];
-    if (parentWindow == nil) {
+    // The configured position is relative to the parent's window
+    // geometry origin O, y growing downward; onScreen = O + (x, -y)
+    // since screen coordinates grow upward (see -parentOrigin:
+    // screen: for how O is derived, which folds in any offset the
+    // parent's own view has -- both its geometry clipping and the
+    // parent being a popup in its own right).
+    NSPoint origin;
+    if (![self parentOrigin: &origin screen: NULL]) {
         return;
     }
-
-    // The configured position is relative to the parent's window
-    // geometry origin, y growing downward. Converting through the
-    // parent's view takes care of any offset that view itself has
-    // (both its geometry clipping and the parent being a popup
-    // in its own right).
-    NSRect parentGeometry = [parentSurface windowGeometry];
-    NSPoint inParentView;
-    inParentView.x = parentGeometry.origin.x + _position.x;
-    inParentView.y = [parentSurface bounds].size.height
-        - (parentGeometry.origin.y + _position.y);
-    NSPoint inWindow = [parentSurface convertPoint: inParentView
-                                            toView: nil];
-    NSPoint onScreen = [parentWindow convertBaseToScreen: inWindow];
+    NSPoint onScreen = NSMakePoint(
+        origin.x + _position.x,
+        origin.y - _position.y
+    );
     // Read the frame after the possible resize above; the top-left
     // point depends on the height.
     NSRect frame = [_window frame];

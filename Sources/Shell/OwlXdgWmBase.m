@@ -91,15 +91,18 @@ static void xdg_positioner_set_offset(struct wl_client *client, struct wl_resour
 }
 
 static void xdg_positioner_set_reactive(struct wl_client *client, struct wl_resource *resource) {
-    // We don't reconstrain popups (no constraint_adjustment support),
-    // so there is nothing to react to; accept and ignore.
+    // constraint_adjustment is applied once, at the initial
+    // xdg_popup.configure (see -[OwlXdgPopup
+    // sendConfigureForPositioner:]); reconstraining a mapped popup
+    // in response to the parent moving/resizing (what set_reactive
+    // asks for) is out of scope -- accept and ignore.
 }
 
 static void xdg_positioner_set_parent_size(struct wl_client *client, struct wl_resource *resource,
-    int32_t parent_width, int32_t parent_height) { /* unused: no constraint_adjustment support */ }
+    int32_t parent_width, int32_t parent_height) { /* unused: only informs reactive repositioning, which we don't do */ }
 
 static void xdg_positioner_set_parent_configure(struct wl_client *client, struct wl_resource *resource,
-    uint32_t serial) { /* unused: no constraint_adjustment support */ }
+    uint32_t serial) { /* unused: only informs reactive repositioning, which we don't do */ }
 
 static const struct xdg_positioner_interface xdg_positioner_impl = {
     .destroy = xdg_positioner_destroy,

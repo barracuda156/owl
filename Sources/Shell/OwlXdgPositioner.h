@@ -21,11 +21,8 @@
 
 
 /* Holds the rules accumulated on an xdg_positioner object and
- * computes the resulting popup geometry from them. Owl does not
- * implement constraint_adjustment (flip/slide/resize against screen
- * edges); the popup is placed at the anchor+gravity+offset position
- * unconditionally, which is spec-compliant for constraint_adjustment
- * "none" and a reasonable approximation otherwise.
+ * computes the resulting popup geometry from them, including
+ * constraint_adjustment (flip/slide/resize against screen edges).
  */
 @interface OwlXdgPositioner : NSObject {
 @public
@@ -42,7 +39,16 @@
 
 // Returns the popup's window-geometry rect, positioned relative to
 // the parent's window geometry origin (i.e. the rect the protocol's
-// xdg_popup.configure x/y/width/height should carry).
+// xdg_popup.configure x/y/width/height should carry), from the
+// anchor+gravity+offset alone -- constraint_adjustment "none".
 - (NSRect) geometryRelativeToParent;
+
+// Same, but applies constraint_adjustment (flip, then slide, then
+// resize, spec precedence, each only for the axes it's enabled for)
+// so the result fits inside `box`. `box` must be in the same
+// parent-window-geometry-relative, y-down coordinate space as the
+// returned rect -- the caller is responsible for converting the
+// screen's visible area into that space.
+- (NSRect) geometryRelativeToParentConstrainedTo: (NSRect) box;
 
 @end
