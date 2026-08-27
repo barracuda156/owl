@@ -35,6 +35,13 @@
     // -update, at commit); a width or height of 0 means "no limit
     // on that axis" per spec.
     NSSize _minSize, _maxSize;
+    // set_parent: unretained (cleared by a destroy listener on the
+    // parent's resource, the same non-owning-pointer idiom used for
+    // foreign resources elsewhere -- see OwlShmBuffer/
+    // OwlZwpRelativePointerManagerV1). The NSWindow-level
+    // addChildWindow is separate and re-applied at every -map.
+    OwlXdgToplevel *_parent;
+    struct wl_listener _parentDestroyListener;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource
@@ -44,5 +51,12 @@
 - (void) sendConfigureWithSize: (NSSize) size;
 
 - (OwlWindowWrapper *) windowWrapper;
+
+// Both called from the static set_parent handler (before any
+// ObjC method in this file is textually defined) as well as from
+// -map; declared here so every call site sees the selector
+// regardless of definition order.
+- (void) attachToParent;
+- (void) detachFromParent;
 
 @end

@@ -35,6 +35,10 @@
     // -update, at commit); a width or height of 0 means "no limit
     // on that axis" per spec.
     NSSize _minSize, _maxSize;
+    // set_parent bookkeeping; see the stable xdg_toplevel's
+    // matching ivars for the ownership/lifetime rationale.
+    OwlZxdgToplevelV6 *_parent;
+    struct wl_listener _parentDestroyListener;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource
@@ -42,5 +46,8 @@
              xdgSurface: (OwlZxdgSurfaceV6 *) xdgSurface;
 
 - (void) sendConfigureWithSize: (NSSize) size;
+
+- (void) attachToParent;
+- (void) detachFromParent;
 
 @end

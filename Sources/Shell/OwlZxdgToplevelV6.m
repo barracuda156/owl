@@ -29,6 +29,33 @@
 
 @implementation OwlZxdgToplevelV6
 
+static NSMutableArray *toplevels;
+
++ (void) initialize {
+    if (toplevels == nil) {
+        toplevels = [[NSMutableArray alloc] initWithCapacity: 1];
+    }
+}
+
+// See the stable xdg_toplevel's matching function for why the scan
+// is needed instead of just using `data`.
+static void xdg_toplevel_v6_parent_destroy_notify(
+    struct wl_listener *listener,
+    void *data
+) {
+    OwlZxdgToplevelV6 *self = nil;
+    for (OwlZxdgToplevelV6 *toplevel in toplevels) {
+        if (&toplevel->_parentDestroyListener == listener) {
+            self = toplevel;
+            break;
+        }
+    }
+    if (self == nil) {
+        return;
+    }
+    [self detachFromParent];
+}
+
 static void xdg_toplevel_v6_destroy(struct wl_resource *resource) {
     OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
     self->_destroying = YES;
@@ -41,7 +68,9 @@ static void xdg_toplevel_v6_destroy(struct wl_resource *resource) {
     // No -mouseExited: is coming for the window being closed; if
     // the cursor was inside, hand the pointer focus back cleanly.
     [OwlSurface relinquishPointerFocusOf: self->_surface];
+    [self detachFromParent];
     [self->_window close];
+    [toplevels removeObjectIdenticalTo: self];
     [self release];
 }
 
@@ -57,7 +86,32 @@ static void xdg_toplevel_v6_set_parent_handler(
     struct wl_resource *resource,
     struct wl_resource *parent_resource
 ) {
-    // TODO
+    OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
+    OwlZxdgToplevelV6 *parent = parent_resource != NULL
+        ? wl_resource_get_user_data(parent_resource)
+        : nil;
+
+    // zxdg_toplevel_v6 has no invalid_parent error in its protocol
+    // enum (unlike the stable interface) to post for self-parenting;
+    // just ignore the request instead, the same way this mirror
+    // clamps instead of erroring elsewhere (see -applyMinMaxSize).
+    if (parent == self) {
+        return;
+    }
+    if (self->_parent == parent) {
+        return;
+    }
+
+    [self detachFromParent];
+    self->_parent = parent;
+    if (parent != nil) {
+        self->_parentDestroyListener.notify = xdg_toplevel_v6_parent_destroy_notify;
+        wl_resource_add_destroy_listener(
+            parent->_resource,
+            &self->_parentDestroyListener
+        );
+        [self attachToParent];
+    }
 }
 
 static void xdg_toplevel_v6_set_title_handler(
@@ -214,6 +268,8 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
         xdg_toplevel_v6_destroy
     );
 
+    [toplevels addObject: self];
+
     return self;
 }
 
@@ -281,9 +337,51 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
     return wl_display_next_serial(display);
 }
 
+- (void) detachWindowFromParentWindow {
+    NSWindow *window = [_window window];
+    NSWindow *parentWindow = [window parentWindow];
+    if (parentWindow != nil) {
+        [parentWindow removeChildWindow: window];
+    }
+}
+
+// See the stable xdg_toplevel's matching method for the full
+// rationale (identical design, mirrored here).
+- (void) detachFromParent {
+    if (_parent == nil) {
+        return;
+    }
+    wl_list_remove(&_parentDestroyListener.link);
+    wl_list_init(&_parentDestroyListener.link);
+    _parent = nil;
+    [self detachWindowFromParentWindow];
+}
+
+- (void) attachToParent {
+    if (_parent == nil) {
+        return;
+    }
+    NSWindow *window = [_window window];
+    NSWindow *parentWindow = [_parent->_window window];
+    if (window == nil || parentWindow == nil) {
+        return;
+    }
+    if ([window parentWindow] == parentWindow) {
+        return;
+    }
+    NSWindow *ancestor = parentWindow;
+    while (ancestor != nil && ancestor != window) {
+        ancestor = [ancestor parentWindow];
+    }
+    if (ancestor == nil) {
+        [parentWindow addChildWindow: window ordered: NSWindowAbove];
+    }
+}
+
 - (void) map {
     [self update];
     [_window map];
+    [self attachToParent];
 }
 
 - (void) unmap {
@@ -291,6 +389,7 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
         [self sendConfigureWithSize: NSZeroSize];
         return;
     }
+    [self detachWindowFromParentWindow];
     [_window unmap];
 }
 

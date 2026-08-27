@@ -29,6 +29,37 @@
 
 @implementation OwlXdgToplevel
 
+static NSMutableArray *toplevels;
+
++ (void) initialize {
+    if (toplevels == nil) {
+        toplevels = [[NSMutableArray alloc] initWithCapacity: 1];
+    }
+}
+
+// Fired when a toplevel that some OTHER toplevel is set_parent'd to
+// gets destroyed. data is the parent's resource, not useful for
+// finding the child; recover it the same way
+// OwlZwpRelativePointerManagerV1 recovers self for a listener on a
+// foreign resource -- scan the live instances for whose
+// _parentDestroyListener this is.
+static void xdg_toplevel_parent_destroy_notify(
+    struct wl_listener *listener,
+    void *data
+) {
+    OwlXdgToplevel *self = nil;
+    for (OwlXdgToplevel *toplevel in toplevels) {
+        if (&toplevel->_parentDestroyListener == listener) {
+            self = toplevel;
+            break;
+        }
+    }
+    if (self == nil) {
+        return;
+    }
+    [self detachFromParent];
+}
+
 static void xdg_toplevel_destroy(struct wl_resource *resource) {
     OwlXdgToplevel *self = wl_resource_get_user_data(resource);
     self->_destroying = YES;
@@ -43,7 +74,13 @@ static void xdg_toplevel_destroy(struct wl_resource *resource) {
     // No -mouseExited: is coming for the window being closed; if
     // the cursor was inside, hand the pointer focus back cleanly.
     [OwlSurface relinquishPointerFocusOf: self->_surface];
+    // Detach from our own parent, if any, before closing -- any
+    // toplevels parented to US already detached themselves via
+    // their own listener on this resource's destroy_signal, which
+    // fires before this function runs.
+    [self detachFromParent];
     [self->_window close];
+    [toplevels removeObjectIdenticalTo: self];
     [self release];
 }
 
@@ -59,7 +96,33 @@ static void xdg_toplevel_set_parent_handler(
     struct wl_resource *resource,
     struct wl_resource *parent_resource
 ) {
-    // TODO
+    OwlXdgToplevel *self = wl_resource_get_user_data(resource);
+    OwlXdgToplevel *parent = parent_resource != NULL
+        ? wl_resource_get_user_data(parent_resource)
+        : nil;
+
+    if (parent == self) {
+        wl_resource_post_error(
+            resource,
+            XDG_TOPLEVEL_ERROR_INVALID_PARENT,
+            "xdg_toplevel cannot be parented to itself"
+        );
+        return;
+    }
+    if (self->_parent == parent) {
+        return;
+    }
+
+    [self detachFromParent];
+    self->_parent = parent;
+    if (parent != nil) {
+        self->_parentDestroyListener.notify = xdg_toplevel_parent_destroy_notify;
+        wl_resource_add_destroy_listener(
+            parent->_resource,
+            &self->_parentDestroyListener
+        );
+        [self attachToParent];
+    }
 }
 
 static void xdg_toplevel_set_title_handler(
@@ -240,6 +303,8 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
         wl_array_release(&capabilities);
     }
 
+    [toplevels addObject: self];
+
     return self;
 }
 
@@ -322,9 +387,67 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     return wl_display_next_serial(display);
 }
 
+- (void) detachWindowFromParentWindow {
+    NSWindow *window = [_window window];
+    NSWindow *parentWindow = [window parentWindow];
+    if (parentWindow != nil) {
+        [parentWindow removeChildWindow: window];
+    }
+}
+
+// Clears the logical parent relationship (ivar + listener on the
+// parent's resource) and undoes the NSWindow-level attachment, if
+// any. Called when set_parent picks a new parent, when the parent's
+// resource is destroyed (via the notify function above), and when
+// our own resource is destroyed.
+- (void) detachFromParent {
+    if (_parent == nil) {
+        return;
+    }
+    wl_list_remove(&_parentDestroyListener.link);
+    wl_list_init(&_parentDestroyListener.link);
+    _parent = nil;
+    [self detachWindowFromParentWindow];
+}
+
+// Applies the NSWindow-level addChildWindow for the current logical
+// _parent, if both windows already exist. Called right after
+// set_parent (when we're already mapped) and from -map (the common
+// case: set_parent, then map). If the parent hasn't been mapped yet
+// at either point, this is a silent no-op -- there is no hook to
+// notify already-mapped children when a later-mapped parent's
+// window appears, which is an accepted gap for how far this task
+// goes (real transient dialogs map after their already-visible
+// owner in practice).
+- (void) attachToParent {
+    if (_parent == nil) {
+        return;
+    }
+    NSWindow *window = [_window window];
+    NSWindow *parentWindow = [_parent->_window window];
+    if (window == nil || parentWindow == nil) {
+        return;
+    }
+    if ([window parentWindow] == parentWindow) {
+        return;
+    }
+    // Refuse to create a child-window cycle (cloned from the popup
+    // parenting guard in OwlXdgSurface.m): a hostile client could
+    // otherwise chain toplevels into a loop, which AppKit does not
+    // survive attaching.
+    NSWindow *ancestor = parentWindow;
+    while (ancestor != nil && ancestor != window) {
+        ancestor = [ancestor parentWindow];
+    }
+    if (ancestor == nil) {
+        [parentWindow addChildWindow: window ordered: NSWindowAbove];
+    }
+}
+
 - (void) map {
     [self update];
     [_window map];
+    [self attachToParent];
 }
 
 - (void) unmap {
@@ -332,6 +455,11 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
         [self sendConfigureWithSize: NSZeroSize];
         return;
     }
+    // Drop the NSWindow-level attachment while hidden, out of
+    // caution around AppKit's behavior for attached-but-ordered-out
+    // windows; the logical _parent ivar survives for -map to
+    // re-apply it on the next map.
+    [self detachWindowFromParentWindow];
     [_window unmap];
 }
 
