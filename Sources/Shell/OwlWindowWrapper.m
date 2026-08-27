@@ -22,6 +22,16 @@
 
 @implementation OwlWindowWrapper
 
+- (id) init {
+    self = [super init];
+    // Matches NSWindow's own unset-max default; contentMinSize's
+    // NSZeroSize default already matches NSWindow's, so it needs no
+    // explicit init. Roles that never touch min/max (e.g. wl_shell)
+    // must still get an unclamped window out of -createWindow.
+    _contentMaxSize = NSMakeSize(CGFLOAT_MAX, CGFLOAT_MAX);
+    return self;
+}
+
 - (void) dealloc {
     [_window release];
     [_title release];
@@ -37,6 +47,8 @@
     // won't draw their own decorations. For clients that draw
     // them anyway, the SSD can be toggled off from the menu.
     _window = [[OwlWindow alloc] initWithSize: _size displaySSD: YES];
+    [_window setContentMinSize: _contentMinSize];
+    [_window setContentMaxSize: _contentMaxSize];
 
     if (_title != nil) {
         [_window setTitle: _title];
@@ -95,6 +107,20 @@
         return;
     }
     [_window setContentSize: _size];
+}
+
+- (void) setContentMinSize: (NSSize) size {
+    _contentMinSize = size;
+    if (_window != nil) {
+        [_window setContentMinSize: size];
+    }
+}
+
+- (void) setContentMaxSize: (NSSize) size {
+    _contentMaxSize = size;
+    if (_window != nil) {
+        [_window setContentMaxSize: size];
+    }
 }
 
 - (void) setTitle: (NSString *) title {

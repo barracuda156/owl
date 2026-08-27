@@ -31,6 +31,10 @@
     BOOL _activated, _fullscreen, _resizing, _maximized;
     BOOL _destroying;
     OwlWindowWrapper *_window;
+    // set_min_size / set_max_size are double-buffered (applied in
+    // -update, at commit); a width or height of 0 means "no limit
+    // on that axis" per spec.
+    NSSize _minSize, _maxSize;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource

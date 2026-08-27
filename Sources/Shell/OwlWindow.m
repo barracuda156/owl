@@ -168,9 +168,40 @@ static BOOL left_mouse_button_is_down(void) {
     BOOL resizeLeft = (edges & RESIZE_EDGE_LEFT) != 0;
     BOOL resizeRight = (edges & RESIZE_EDGE_RIGHT) != 0;
 
-    /* Minimum window size */
+    // Client resize limits (xdg_toplevel.set_min/max_size, already
+    // applied to our real contentMinSize/contentMaxSize by the role
+    // on every commit) are content sizes; convert to frame space,
+    // the coordinate system -setFrame: below works in. A component
+    // of 0 in contentMinSize, or CGFLOAT_MAX in contentMaxSize,
+    // means the client set no limit on that axis (see
+    // OwlWindowWrapper's default and OwlXdgToplevel -update).
+    NSSize minContent = [self contentMinSize];
+    NSSize maxContent = [self contentMaxSize];
+
+    /* Minimum window size: 100.0 floor only when the client hasn't
+     * asked for a minimum of its own. */
     CGFloat minWidth = 100.0;
     CGFloat minHeight = 100.0;
+    if (minContent.width > 0) {
+        minWidth = [self frameRectForContentRect:
+            NSMakeRect(0, 0, minContent.width, 0)].size.width;
+    }
+    if (minContent.height > 0) {
+        minHeight = [self frameRectForContentRect:
+            NSMakeRect(0, 0, 0, minContent.height)].size.height;
+    }
+
+    /* Maximum window size: 0 means no cap. */
+    CGFloat maxWidth = 0;
+    CGFloat maxHeight = 0;
+    if (maxContent.width < CGFLOAT_MAX) {
+        maxWidth = [self frameRectForContentRect:
+            NSMakeRect(0, 0, maxContent.width, 0)].size.width;
+    }
+    if (maxContent.height < CGFLOAT_MAX) {
+        maxHeight = [self frameRectForContentRect:
+            NSMakeRect(0, 0, 0, maxContent.height)].size.height;
+    }
 
     while (YES) {
         // Finite timeout for the same reason as in
@@ -202,6 +233,9 @@ static BOOL left_mouse_button_is_down(void) {
             if (newFrame.size.width < minWidth) {
                 newFrame.size.width = minWidth;
             }
+            if (maxWidth > 0 && newFrame.size.width > maxWidth) {
+                newFrame.size.width = maxWidth;
+            }
         }
 
         if (resizeLeft) {
@@ -209,6 +243,10 @@ static BOOL left_mouse_button_is_down(void) {
             if (newWidth < minWidth) {
                 newWidth = minWidth;
                 deltaX = originalFrame.size.width - minWidth;
+            }
+            if (maxWidth > 0 && newWidth > maxWidth) {
+                newWidth = maxWidth;
+                deltaX = originalFrame.size.width - maxWidth;
             }
             newFrame.size.width = newWidth;
             newFrame.origin.x = originalFrame.origin.x + deltaX;
@@ -224,6 +262,9 @@ static BOOL left_mouse_button_is_down(void) {
             if (newFrame.size.height < minHeight) {
                 newFrame.size.height = minHeight;
             }
+            if (maxHeight > 0 && newFrame.size.height > maxHeight) {
+                newFrame.size.height = maxHeight;
+            }
         }
 
         if (resizeBottom) {
@@ -231,6 +272,10 @@ static BOOL left_mouse_button_is_down(void) {
             if (newHeight < minHeight) {
                 newHeight = minHeight;
                 deltaY = originalFrame.size.height - minHeight;
+            }
+            if (maxHeight > 0 && newHeight > maxHeight) {
+                newHeight = maxHeight;
+                deltaY = originalFrame.size.height - maxHeight;
             }
             newFrame.size.height = newHeight;
             newFrame.origin.y = originalFrame.origin.y + deltaY;

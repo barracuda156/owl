@@ -24,6 +24,8 @@
     OwlWindow *_window;
     NSView *_view;
     NSSize _size;
+    NSSize _contentMinSize;
+    NSSize _contentMaxSize;
     id<NSWindowDelegate> _windowDelegate;
 }
 
@@ -38,6 +40,8 @@
 - (void) unmaximize;
 
 - (void) setContentSize: (NSSize) size;
+- (void) setContentMinSize: (NSSize) size;
+- (void) setContentMaxSize: (NSSize) size;
 - (void) setTitle: (NSString *) title;
 - (void) setView: (NSView *) view;
 - (void) setWindowDelegate: (id<NSWindowDelegate>) delegate;

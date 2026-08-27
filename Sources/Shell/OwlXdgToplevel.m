@@ -141,7 +141,8 @@ static void xdg_toplevel_set_max_size_handler(
     int32_t width,
     int32_t height
 ) {
-    // TODO
+    OwlXdgToplevel *self = wl_resource_get_user_data(resource);
+    self->_maxSize = NSMakeSize(width, height);
 }
 
 static void xdg_toplevel_set_min_size_handler(
@@ -150,7 +151,8 @@ static void xdg_toplevel_set_min_size_handler(
     int32_t width,
     int32_t height
 ) {
-    // TODO
+    OwlXdgToplevel *self = wl_resource_get_user_data(resource);
+    self->_minSize = NSMakeSize(width, height);
 }
 
 static void xdg_toplevel_set_minimized_handler(
@@ -333,6 +335,41 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
     [_window unmap];
 }
 
+// Double-buffered per spec: set_min_size / set_max_size land in
+// _minSize / _maxSize as they're requested, and -update (called on
+// every commit of a mapped toplevel, and once at map) applies
+// whatever's currently there. A negative component, or an effective
+// min > max on an axis where both are set, is a protocol error; the
+// values are left un-applied, which is fine because posting a
+// protocol error is fatal to the client -- there's no next commit to
+// worry about reverting for.
+- (void) applyMinMaxSize {
+    BOOL maxWidthSet = _maxSize.width > 0;
+    BOOL maxHeightSet = _maxSize.height > 0;
+    if (_minSize.width < 0 || _minSize.height < 0 ||
+        _maxSize.width < 0 || _maxSize.height < 0 ||
+        (maxWidthSet && _minSize.width > _maxSize.width) ||
+        (maxHeightSet && _minSize.height > _maxSize.height)) {
+        wl_resource_post_error(
+            _resource,
+            XDG_TOPLEVEL_ERROR_INVALID_SIZE,
+            "invalid min/max size"
+        );
+        return;
+    }
+
+    NSSize minSize = NSMakeSize(
+        (_minSize.width > 0) ? _minSize.width : 0.0,
+        (_minSize.height > 0) ? _minSize.height : 0.0
+    );
+    NSSize maxSize = NSMakeSize(
+        maxWidthSet ? _maxSize.width : CGFLOAT_MAX,
+        maxHeightSet ? _maxSize.height : CGFLOAT_MAX
+    );
+    [_window setContentMinSize: minSize];
+    [_window setContentMaxSize: maxSize];
+}
+
 - (void) update {
     // Size the window to the client's window geometry, not the
     // full buffer: CSD clients (GTK) draw drop shadows around the
@@ -353,6 +390,8 @@ static const struct xdg_toplevel_interface xdg_toplevel_impl = {
         [_surface setFrameOrigin: origin];
         [_surface updateTrackingRect];
     }
+
+    [self applyMinMaxSize];
 }
 
 - (void) windowDidResize: (NSNotification *) notification {

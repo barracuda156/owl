@@ -139,7 +139,8 @@ static void xdg_toplevel_v6_set_max_size_handler(
     int32_t width,
     int32_t height
 ) {
-    // TODO
+    OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
+    self->_maxSize = NSMakeSize(width, height);
 }
 
 static void xdg_toplevel_v6_set_min_size_handler(
@@ -148,7 +149,8 @@ static void xdg_toplevel_v6_set_min_size_handler(
     int32_t width,
     int32_t height
 ) {
-    // TODO
+    OwlZxdgToplevelV6 *self = wl_resource_get_user_data(resource);
+    self->_minSize = NSMakeSize(width, height);
 }
 
 static void xdg_toplevel_v6_set_minimized_handler(
@@ -292,6 +294,34 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
     [_window unmap];
 }
 
+// Same double-buffering as the stable xdg_toplevel (see its
+// -applyMinMaxSize), but zxdg_toplevel_v6 has no invalid_size error
+// in its protocol enum to post, so out-of-range values are clamped
+// instead of rejected: negative components floor to 0 (unset), and
+// a min that ended up above an also-set max is pulled down to it.
+- (void) applyMinMaxSize {
+    NSSize minSize = _minSize;
+    NSSize maxSize = _maxSize;
+
+    if (minSize.width < 0) minSize.width = 0;
+    if (minSize.height < 0) minSize.height = 0;
+    if (maxSize.width < 0) maxSize.width = 0;
+    if (maxSize.height < 0) maxSize.height = 0;
+
+    if (maxSize.width > 0 && minSize.width > maxSize.width) {
+        minSize.width = maxSize.width;
+    }
+    if (maxSize.height > 0 && minSize.height > maxSize.height) {
+        minSize.height = maxSize.height;
+    }
+
+    [_window setContentMinSize: minSize];
+    [_window setContentMaxSize: NSMakeSize(
+        (maxSize.width > 0) ? maxSize.width : CGFLOAT_MAX,
+        (maxSize.height > 0) ? maxSize.height : CGFLOAT_MAX
+    )];
+}
+
 - (void) update {
     // Size the window to the client's window geometry, not the
     // full buffer: CSD clients (GTK) draw drop shadows around the
@@ -312,6 +342,8 @@ static const struct zxdg_toplevel_v6_interface xdg_toplevel_v6_impl = {
         [_surface setFrameOrigin: origin];
         [_surface updateTrackingRect];
     }
+
+    [self applyMinMaxSize];
 }
 
 - (void) windowDidResize: (NSNotification *) notification {
