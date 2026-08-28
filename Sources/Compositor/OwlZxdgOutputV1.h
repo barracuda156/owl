@@ -21,21 +21,36 @@
 
 @class OwlOutput;
 
-/* zxdg_output_v1: a thin, static wrapper over OwlOutput's NSScreen
- * frame. Owl never tracks screen reconfiguration at runtime (nothing
- * else in the compositor does either), so the whole event burst is
- * sent once at construction and no reference to the wl_output or its
- * OwlOutput is kept around afterwards. */
+/* zxdg_output_v1: a thin wrapper over OwlOutput's NSScreen frame,
+ * re-sent on -refresh whenever OwlOutput's hot-plug handler decides
+ * the underlying display's geometry may have changed. */
 @interface OwlZxdgOutputV1 : NSObject {
     struct wl_resource *_resource;
+    // outputResource is the wl_output this xdg_output was created
+    // for (see zxdg_output_manager_v1.get_xdg_output); only used to
+    // send wl_output.done once a burst is out, per the version-3
+    // done semantics. Foreign resource -- destroyed independently of
+    // us, so it is watched and nulled out via a destroy listener the
+    // same way OwlXdgToplevel watches its set_parent target.
+    struct wl_resource *_outputResource;
+    struct wl_listener _outputResourceDestroyListener;
+    // The display this xdg_output mirrors, captured at construction
+    // time. Kept as a display ID rather than a retained OwlOutput* so
+    // -refresh can re-resolve the live NSScreen independently of
+    // whatever order OwlOutput's own hot-plug bookkeeping runs in.
+    uint32_t _displayID;
 }
 
-// outputResource is the wl_output this xdg_output was created for
-// (see zxdg_output_manager_v1.get_xdg_output); it is only used to
-// send wl_output.done once the initial xdg_output burst is out, per
-// the version-3 done semantics.
 - (id) initWithResource: (struct wl_resource *) resource
                   output: (OwlOutput *) output
           outputResource: (struct wl_resource *) outputResource;
+
+// Re-send the logical position/size (+ terminating done) for the
+// live NSScreen of this xdg_output's display. No-op if that display
+// is no longer present.
+- (void) refresh;
+
+// Fan -refresh over every live xdg_output mirroring displayID.
++ (void) refreshDisplayID: (uint32_t) displayID;
 
 @end

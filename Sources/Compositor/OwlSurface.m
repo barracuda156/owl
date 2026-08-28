@@ -32,6 +32,7 @@
 #import "OwlRegion.h"
 #import "OwlWlDataDevice.h"
 #import "OwlDragDataSource.h"
+#import "OwlOutput.h"
 #import "OwlFeatures.h"
 #import "viewporter.h"
 #import <wayland-server.h>
@@ -51,6 +52,19 @@
 // dying popup hand the focus back cleanly. Unretained; cleared
 // whenever the surface loses the focus or is destroyed.
 static OwlSurface *pointer_focus_surface;
+
+// Every live surface, unretained; appended at the end of
+// -initWithResource:, removed in surface_destroy. Needed so
+// OwlOutput's hot-plug handler can fan -updateOutputEnterLeave over
+// all of them (a window's screen can change there without any
+// -viewDidMoveToWindow or -windowDidChangeScreen: firing).
+static NSMutableArray *liveSurfaces;
+
++ (void) initialize {
+    if (liveSurfaces == nil) {
+        liveSurfaces = [[NSMutableArray alloc] initWithCapacity: 1];
+    }
+}
 
 - (struct wl_resource *) resource {
     return _resource;
@@ -81,6 +95,8 @@ static void surface_destroy(struct wl_resource *resource) {
     // The object can outlive the resource (roles retain it); the
     // event senders check for this and skip dead surfaces.
     self->_resource = NULL;
+    [liveSurfaces removeObjectIdenticalTo: self];
+    [[NSNotificationCenter defaultCenter] removeObserver: self];
     [self removeFromSuperview];
     [self release];
 }
@@ -686,7 +702,24 @@ static const struct wl_surface_interface surface_interface = {
     }
 #endif
 
+    [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(windowDidChangeScreen:)
+               name: NSWindowDidChangeScreenNotification
+             object: nil];
+    [liveSurfaces addObject: self];
+
     return self;
+}
+
+// NSWindowDidChangeScreenNotification is posted with object: nil
+// registration, so it fires for every window in the app; filter to
+// the one this surface's view is actually in.
+- (void) windowDidChangeScreen: (NSNotification *) notification {
+    if ([notification object] != [self window]) {
+        return;
+    }
+    [self updateOutputEnterLeave];
 }
 
 - (void) dealloc {
@@ -768,6 +801,53 @@ static const struct wl_surface_interface surface_interface = {
     if (wasInside) {
         [[surface pointer] sendLeaveSurface: surface];
         [[OwlServer sharedServer] flushClientsLater];
+    }
+}
+
+- (void) updateOutputEnterLeave {
+    if (_resource == NULL) {
+        return;
+    }
+
+    NSScreen *screen = [[self window] screen];
+    BOOL hasNewDisplayID = (screen != nil);
+    uint32_t newDisplayID =
+        hasNewDisplayID ? [OwlOutput displayIDForScreen: screen] : 0;
+
+    if (hasNewDisplayID == _hasCurrentOutputDisplayID
+        && (!hasNewDisplayID || newDisplayID == _currentOutputDisplayID)) {
+        return;
+    }
+
+    struct wl_client *client = wl_resource_get_client(_resource);
+
+    if (_hasCurrentOutputDisplayID) {
+        for (OwlOutput *output in
+                 [OwlOutput liveOutputsForClient: client]) {
+            if ([output displayID] == _currentOutputDisplayID) {
+                wl_surface_send_leave(_resource, [output resource]);
+            }
+        }
+    }
+
+    _hasCurrentOutputDisplayID = hasNewDisplayID;
+    _currentOutputDisplayID = newDisplayID;
+
+    if (hasNewDisplayID) {
+        for (OwlOutput *output in
+                 [OwlOutput liveOutputsForClient: client]) {
+            if ([output displayID] == newDisplayID) {
+                wl_surface_send_enter(_resource, [output resource]);
+            }
+        }
+    }
+
+    [[OwlServer sharedServer] flushClientsLater];
+}
+
++ (void) updateOutputEnterLeaveForAllSurfaces {
+    for (OwlSurface *surface in liveSurfaces) {
+        [surface updateOutputEnterLeave];
     }
 }
 
@@ -1042,6 +1122,9 @@ static const struct wl_surface_interface surface_interface = {
     // gets its chance to activate now: if the window is already
     // key, no NSWindowDidBecomeKeyNotification will ever fire.
     [OwlZwpPointerConstraintsV1 notifySurfaceMovedToWindow: self];
+    // Likewise the surface's output: it has no screen (and thus no
+    // display ID) until its view is actually in a window.
+    [self updateOutputEnterLeave];
 }
 
 // Whether this key event should be offered to the Cocoa input

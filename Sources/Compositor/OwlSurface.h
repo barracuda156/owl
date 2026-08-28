@@ -97,6 +97,12 @@
     // retained: the viewport resource owns the object, and clears
     // this pointer when it is destroyed.
     OwlWpViewport *_viewport;
+
+    // The display this surface currently believes it is on, for
+    // wl_surface.enter/leave. _hasCurrentOutputDisplayID is NO until
+    // the surface's view first ends up in a window on some screen.
+    BOOL _hasCurrentOutputDisplayID;
+    uint32_t _currentOutputDisplayID;
 }
 
 - (id) initWithResource: (struct wl_resource *) resource;
@@ -169,5 +175,16 @@
  * cursor is (or may be) inside it — Cocoa delivers no -mouseExited:
  * for that. */
 + (void) relinquishPointerFocusOf: (OwlSurface *) surface;
+
+/* Recompute which output (if any) this surface is on and send
+ * wl_surface.enter/leave for any change, fanned over every wl_output
+ * this surface's client has bound. Called when the view's window
+ * changes, when that window's screen changes, and once per surface
+ * from OwlOutput's hot-plug handler (a window can end up on a
+ * different screen there too, e.g. its screen was unplugged). */
+- (void) updateOutputEnterLeave;
+
+/* Fan -updateOutputEnterLeave over every live surface. */
++ (void) updateOutputEnterLeaveForAllSurfaces;
 
 @end
