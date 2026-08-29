@@ -851,6 +851,35 @@ static const struct wl_surface_interface surface_interface = {
     }
 }
 
++ (void) sendRetroactiveEnterForOutput: (OwlOutput *) output {
+    struct wl_resource *outputResource = [output resource];
+    struct wl_client *client = wl_resource_get_client(outputResource);
+    uint32_t displayID = [output displayID];
+
+    for (OwlSurface *surface in liveSurfaces) {
+        if (surface->_resource == NULL) {
+            // The surface object outlived its resource; there is no
+            // wl_surface left to deliver enter on.
+            continue;
+        }
+        if (wl_resource_get_client(surface->_resource) != client) {
+            continue;
+        }
+        // Match against the cached display ID rather than re-resolving
+        // the window's screen, so this stays consistent with whatever
+        // -updateOutputEnterLeave last announced (and will announce
+        // next) for this surface.
+        if (!surface->_hasCurrentOutputDisplayID
+            || surface->_currentOutputDisplayID != displayID) {
+            continue;
+        }
+        wl_surface_send_enter(surface->_resource, outputResource);
+    }
+    // No flush here: this runs inside the bind request's dispatch,
+    // which flushes on return -- same as the initial event burst the
+    // new wl_output resource just sent.
+}
+
 - (void) mouseEntered: (NSEvent *) event {
     _exitedDuringDrag = NO;
     [[self window] setAcceptsMouseMovedEvents: YES];

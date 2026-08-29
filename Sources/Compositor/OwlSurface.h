@@ -20,6 +20,7 @@
 #import <wayland-server.h>
 
 @class OwlBuffer;
+@class OwlOutput;
 @class OwlPointer;
 @class OwlSurfaceState;
 @class OwlWpPresentationFeedback;
@@ -186,5 +187,14 @@
 
 /* Fan -updateOutputEnterLeave over every live surface. */
 + (void) updateOutputEnterLeaveForAllSurfaces;
+
+/* Send wl_surface.enter on a freshly bound wl_output resource for
+ * every one of that client's surfaces already on its display.
+ * -updateOutputEnterLeave can only reach wl_output resources that
+ * exist when the display ID changes, so a bind that arrives later
+ * (nothing orders binds before surface mapping, and at hot-plug the
+ * enter/leave fan-out necessarily runs before any client has seen
+ * the new global) would otherwise never receive its enter. */
++ (void) sendRetroactiveEnterForOutput: (OwlOutput *) output;
 
 @end

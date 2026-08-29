@@ -290,9 +290,14 @@ static void output_bind(
         version,
         id_
     );
-    [[[OwlOutput alloc] initWithResource: resource
-                                   screen: screen
-                                displayID: displayID] release];
+    OwlOutput *output = [[OwlOutput alloc] initWithResource: resource
+                                                     screen: screen
+                                                  displayID: displayID];
+    // The init above sent this resource its geometry/mode/.../done
+    // burst; now that the client knows what the output is, deliver
+    // the wl_surface.enter events its surfaces already earned on it.
+    [OwlSurface sendRetroactiveEnterForOutput: output];
+    [output release];
 }
 
 + (void) createGlobalForDisplayID: (uint32_t) displayID {
