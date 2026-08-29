@@ -43,6 +43,10 @@
     // The wp_alpha_modifier_surface_v1 multiplier, 1.0 when none
     // is in effect.
     double _alphaMultiplier;
+    // Whether an ext_background_effect_surface_v1 currently wants
+    // its background blurred, reduced from the requested region to
+    // a plain on/off (see OwlExtBackgroundEffectManagerV1.m).
+    BOOL _blurEnabled;
 }
 
 - (id) init;
@@ -78,6 +82,9 @@
 
 - (double) alphaMultiplier;
 - (void) setAlphaMultiplier: (double) alphaMultiplier;
+
+- (BOOL) blurEnabled;
+- (void) setBlurEnabled: (BOOL) blurEnabled;
 
 /* Whether the two states crop and scale identically; when they do
  * not, the same buffer maps onto the view differently, so damage

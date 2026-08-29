@@ -21,6 +21,7 @@
 #import "OwlWpPresentation.h"
 #import "OwlWpViewporter.h"
 #import "OwlWpFractionalScaleManagerV1.h"
+#import "OwlExtBackgroundEffectManagerV1.h"
 #import "OwlPointer.h"
 #import "OwlKeyboard.h"
 #import "OwlZwpKeyboardShortcutsInhibitManagerV1.h"
@@ -285,6 +286,19 @@ static void surface_damage_buffer_handler(
     [_pendingState setAlphaMultiplier: alphaMultiplier];
 }
 
+- (void) setPendingBlurEnabled: (BOOL) enabled {
+    [_pendingState setBlurEnabled: enabled];
+}
+
+// Apply (or remove) the CGS window-level blur for the current
+// state's blurEnabled flag. This is a window property, not a
+// repaint, so unlike the alpha multiplier it is applied directly
+// here rather than folded into -drawRect:.
+- (void) applyBackgroundBlur {
+    [OwlExtBackgroundEffectManagerV1 applyBlur: [_currentState blurEnabled]
+                                      toWindow: [self window]];
+}
+
 // Enforce the wp_viewport rules that are only checked at commit
 // time, against the buffer that is about to be applied. Returns NO
 // after posting a protocol error, in which case the pending state
@@ -377,12 +391,21 @@ static void surface_damage_buffer_handler(
     // Same for the alpha multiplier: a change repaints everything.
     BOOL alphaChanged = [_pendingState alphaMultiplier]
         != [_currentState alphaMultiplier];
+    // Same for background blur, except a change is a window
+    // property update, not something that needs a repaint -- see
+    // the apply call right after the state swap below.
+    BOOL blurChanged = [_pendingState blurEnabled]
+        != [_currentState blurEnabled];
 
     // Actually set the pending state as our new state.
     [_currentState release];
     _currentState = _pendingState;
     _pendingState = [OwlSurfaceState alloc];
     _pendingState = [_pendingState initWithPreviousState: _currentState];
+
+    if (blurChanged) {
+        [self applyBackgroundBlur];
+    }
 
     if ([_currentState inputRegion] != oldInputRegion) {
         // The input region changed; reconsider the tracking rect.
@@ -1154,6 +1177,11 @@ static const struct wl_surface_interface surface_interface = {
     // Likewise the surface's output: it has no screen (and thus no
     // display ID) until its view is actually in a window.
     [self updateOutputEnterLeave];
+    // A commit can request blur before the view is in any window
+    // (no window exists until map), and GTK reuses surfaces across
+    // unmap/remap -- re-apply here for the same reason as the two
+    // notifies above.
+    [self applyBackgroundBlur];
 }
 
 // Whether this key event should be offered to the Cocoa input

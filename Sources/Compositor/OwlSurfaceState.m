@@ -45,6 +45,7 @@
     _viewportDestinationIsSet = previousState->_viewportDestinationIsSet;
     _viewportDestination = previousState->_viewportDestination;
     _alphaMultiplier = previousState->_alphaMultiplier;
+    _blurEnabled = previousState->_blurEnabled;
     return self;
 }
 
@@ -152,6 +153,14 @@
 
 - (void) setAlphaMultiplier: (double) alphaMultiplier {
     _alphaMultiplier = alphaMultiplier;
+}
+
+- (BOOL) blurEnabled {
+    return _blurEnabled;
+}
+
+- (void) setBlurEnabled: (BOOL) blurEnabled {
+    _blurEnabled = blurEnabled;
 }
 
 - (BOOL) hasSameViewportAs: (OwlSurfaceState *) other {

@@ -47,6 +47,7 @@
 #import "OwlOutput.h"
 #import "OwlZxdgOutputManagerV1.h"
 #import "OwlZwlrGammaControlManagerV1.h"
+#import "OwlExtBackgroundEffectManagerV1.h"
 #import "OwlWlDataDeviceManager.h"
 #import "OwlZwpPrimarySelectionDeviceManagerV1.h"
 #import "OwlZwlrDataControlManagerV1.h"
@@ -172,6 +173,7 @@
     [OwlOutput addGlobalToDisplay: _display];
     [OwlZxdgOutputManagerV1 addGlobalToDisplay: _display];
     [OwlZwlrGammaControlManagerV1 addGlobalToDisplay: _display];
+    [OwlExtBackgroundEffectManagerV1 addGlobalToDisplay: _display];
 
     [OwlZwlrDataControlManagerV1 addGlobalToDisplay: _display];
 

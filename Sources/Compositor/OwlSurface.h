@@ -158,6 +158,12 @@
  * multiplier is double-buffered and takes effect on commit. */
 - (void) setPendingAlphaMultiplier: (double) alphaMultiplier;
 
+/* ext_background_effect_v1 support: like all surface state, this is
+ * double-buffered and takes effect on commit. Unlike the alpha
+ * multiplier, applying it is a window-level property change rather
+ * than something that needs a repaint. */
+- (void) setPendingBlurEnabled: (BOOL) enabled;
+
 /* Abandon any composition the Cocoa input context has on this
  * view; called by text-input when the client disables its text
  * input or the keyboard focus leaves. */
