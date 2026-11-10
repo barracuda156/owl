@@ -202,8 +202,8 @@ static void shm_buffer_resource_destroyed(
 
 - (void) drawInRect: (NSRect) rect fromRect: (NSRect) source {
 #ifdef OWL_PLATFORM_APPLE
+    // The blend mode is the caller's choice; see -[OwlSurface drawRect:].
     CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
-    CGContextSetBlendMode(context, kCGBlendModeCopy);
     if (source.origin.x == 0 && source.origin.y == 0
         && source.size.width == _width
         && source.size.height == _height)

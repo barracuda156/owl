@@ -562,6 +562,17 @@ static void surface_commit_handler(
     [_openGLContext setView: self];
     [_openGLContext makeCurrentContext];
 
+#ifdef OWL_PLATFORM_APPLE
+    // A root surface replaces the window's pixels; a subsurface
+    // goes over its parent's, so it must not punch through them.
+    CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
+    BOOL overParent = [[self superview] isKindOfClass: [OwlSurface class]];
+    CGContextSetBlendMode(
+        context,
+        overParent ? kCGBlendModeNormal : kCGBlendModeCopy
+    );
+#endif
+
     // Honor the wp_alpha_modifier_surface_v1 multiplier by drawing
     // the buffer through a transparency layer. This covers the
     // CG-drawn buffer types (shm, single-pixel); GL-composited
@@ -569,9 +580,7 @@ static void surface_commit_handler(
     // opacity. Not available on GNUstep, which has no CGContext.
 #ifdef OWL_PLATFORM_APPLE
     double alpha = [_currentState alphaMultiplier];
-    CGContextRef context = NULL;
     if (alpha < 1.0) {
-        context = [[NSGraphicsContext currentContext] graphicsPort];
         CGContextSaveGState(context);
         CGContextSetAlpha(context, alpha);
         CGContextBeginTransparencyLayer(context, NULL);
@@ -586,7 +595,7 @@ static void surface_commit_handler(
     }
 
 #ifdef OWL_PLATFORM_APPLE
-    if (context != NULL) {
+    if (alpha < 1.0) {
         CGContextEndTransparencyLayer(context);
         CGContextRestoreGState(context);
     }
