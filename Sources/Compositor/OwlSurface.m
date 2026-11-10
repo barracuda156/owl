@@ -104,7 +104,6 @@ static void surface_destroy(struct wl_resource *resource) {
 
 - (void) attachBuffer: (OwlBuffer *) buffer {
     [_pendingState setBuffer: buffer];
-    [buffer invalidate];
 }
 
 static void surface_attach_handler(
@@ -356,6 +355,12 @@ static void surface_damage_buffer_handler(
         // A protocol error has been posted and the client is on
         // its way out; don't apply the broken state.
         return;
+    }
+
+    // Pixels are read (and wl_shm buffers released) per commit, not
+    // per attach; a buffer replaced before commit is never touched.
+    if ([_pendingState bufferAttached]) {
+        [newBuffer invalidate];
     }
 
     // We're going to "map" the surface if it wasn't

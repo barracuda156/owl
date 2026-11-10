@@ -25,6 +25,10 @@
 @interface OwlSurfaceState : NSObject {
     OwlBuffer *_buffer;
     // TODO: dx, dy
+    // Whether wl_surface.attach was sent for this state; never
+    // inherited, so a commit without an attach keeps the buffer
+    // without reading it again.
+    BOOL _bufferAttached;
     NSMutableArray *_callbacks;
     NSMutableArray *_presentationFeedbacks;
     NSMutableArray *_damage;
@@ -54,6 +58,7 @@
 
 - (OwlBuffer *) buffer;
 - (void) setBuffer: (OwlBuffer *) buffer;
+- (BOOL) bufferAttached;
 
 - (NSArray *) callbacks;
 - (void) addCallback: (OwlCallback *) callback;

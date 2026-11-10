@@ -66,6 +66,11 @@
     [buffer retain];
     [_buffer release];
     _buffer = buffer;
+    _bufferAttached = YES;
+}
+
+- (BOOL) bufferAttached {
+    return _bufferAttached;
 }
 
 - (NSArray *) callbacks {
